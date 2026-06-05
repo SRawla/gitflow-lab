@@ -1,0 +1,6 @@
+apiVersion: v2
+name: tbs
+description: GitFlow Lab — minimal Spring Boot service for branching strategy validation
+type: application
+version: 0.0.1       # overridden by CI: helm package --version {BUILD_NUMBER}
+appVersion: "0.0.1"  # informational only

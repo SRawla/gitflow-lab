@@ -1,0 +1,12 @@
+# Default ignored files
+/shelf/
+/workspace.xml
+/queries/
+/dataSources/
+/dataSources.local.xml
+/httpRequests/
+
+# Keep these in source control:
+# .idea/misc.xml        — Java SDK & language level
+# .idea/compiler.xml    — Lombok annotation processing
+# .idea/encodings.xml   — file encodings

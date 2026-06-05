@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tbs
+    username: tbs
+    password: tbs
+
+  jpa:
+    show-sql: true
+
+logging:
+  level:
+    com.sh.tbs: DEBUG
+    org.flywaydb: INFO
