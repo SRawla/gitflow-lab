@@ -10,6 +10,9 @@ jobs:
   drift-check:
     name: Check develop is not behind qa
     runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: read
       issues: write

@@ -17,6 +17,9 @@ jobs:
   tag:
     name: Cut v${{ inputs.release_line }}.${{ inputs.patch_number }}
     runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: write
 

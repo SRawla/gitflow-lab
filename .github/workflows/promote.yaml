@@ -20,6 +20,9 @@ jobs:
   promote:
     name: Promote ${{ inputs.image_tag }} → ${{ inputs.environment }}
     runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: write
       pull-requests: write

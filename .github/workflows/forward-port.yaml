@@ -11,6 +11,9 @@ jobs:
   forward-port:
     name: Forward port ${{ github.ref_name }}
     runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: write
       pull-requests: write
