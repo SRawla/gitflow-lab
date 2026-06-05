@@ -202,7 +202,7 @@ helm upgrade --install tbs-dev chart/tbs \
   -n tbs-dev
 
 # 5. Verify
-curl http://dev.tbs.local/actuator/health
+curl http://dev.tbs.local:8080/actuator/health
 ```
 
 The GitHub Actions workflows automate steps 4–5 for every relevant push.

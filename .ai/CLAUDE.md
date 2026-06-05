@@ -71,8 +71,8 @@ kubectl create namespace tbs-dev --dry-run=client -o yaml | kubectl apply -f -
 helm upgrade --install tbs-dev chart/tbs -f chart/tbs/values-dev.yaml -n tbs-dev
 
 # Verify
-curl http://dev.tbs.local/actuator/health
-curl http://dev.tbs.local/users
+curl http://dev.tbs.local:8080/actuator/health
+curl http://dev.tbs.local:8080/users
 ```
 
 ---

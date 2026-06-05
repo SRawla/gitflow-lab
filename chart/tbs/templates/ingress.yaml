@@ -8,6 +8,8 @@ metadata:
     {{- include "tbs.labels" . | nindent 4 }}
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
+    # kind cluster uses host port 8080 → containerPort 80
+    nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   rules:

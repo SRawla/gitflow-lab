@@ -7,7 +7,7 @@ on:
 jobs:
   validate:
     name: Validate PR
-    runs-on: self-hosted
+    runs-on: ubuntu-latest   # GitHub-hosted — safe for public repo PRs from forks
 
     steps:
       - name: Checkout
