@@ -1,0 +1,64 @@
+name: Sync qa → develop
+
+# Fires on every push to qa.
+# Opens a PR to merge qa into develop (GR1 guard rail).
+# Auto-merges if there are no conflicts.
+on:
+  push:
+    branches:
+      - qa
+
+jobs:
+  sync:
+    name: Sync qa → develop
+    runs-on: self-hosted
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check if develop is already up to date
+        id: check
+        run: |
+          git fetch origin
+          BEHIND=$(git log origin/develop..origin/qa --oneline | wc -l | tr -d ' ')
+          echo "commits_ahead=$BEHIND" >> $GITHUB_OUTPUT
+          echo "qa is $BEHIND commits ahead of develop"
+
+      - name: Create sync branch and PR
+        if: steps.check.outputs.commits_ahead != '0'
+        run: |
+          BRANCH="auto-sync/qa-to-develop-${{ github.run_number }}"
+          git checkout origin/qa -b "$BRANCH"
+          git push origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "auto-sync: qa → develop" \
+            --body "Automated sync of \`qa\` into \`develop\` (GR1 guard rail).
+Triggered by push to qa at commit \`${{ github.sha }}\`." \
+            --base develop \
+            --head "$BRANCH" \
+            --label "auto-sync")
+
+          echo "PR created: $PR_URL"
+
+          # Auto-merge if clean (will fail gracefully if conflicts exist)
+          gh pr merge "$PR_URL" --merge --auto || \
+            echo "⚠️ Auto-merge not possible — conflicts require manual resolution"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Skip — develop already up to date
+        if: steps.check.outputs.commits_ahead == '0'
+        run: echo "✅ develop is already up to date with qa — no sync needed"

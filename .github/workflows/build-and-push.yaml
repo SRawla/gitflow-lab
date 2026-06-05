@@ -1,0 +1,114 @@
+name: Build, Push and Deploy
+
+on:
+  push:
+    branches:
+      - develop
+      - qa
+      - "release/**"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/tbs
+
+jobs:
+  build-and-deploy:
+    name: Build → Push → Deploy
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Resolve env and image tag ─────────────────────────────────────────
+      - name: Resolve deploy target
+        id: target
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
+          RUN="${{ github.run_number }}"
+
+          if [[ "$BRANCH" == "develop" ]]; then
+            TAG="develop.${RUN}.${SHORT_SHA}"
+            NAMESPACE="tbs-dev"
+            VALUES="chart/tbs/values-dev.yaml"
+
+          elif [[ "$BRANCH" == "qa" ]]; then
+            TAG="qa.${RUN}.${SHORT_SHA}"
+            NAMESPACE="tbs-qa"
+            VALUES="chart/tbs/values-qa.yaml"
+
+          elif [[ "$BRANCH" =~ ^release/(.+)$ ]]; then
+            TAG="patch.${RUN}.${SHORT_SHA}"
+            NAMESPACE="tbs-dev"        # patch builds deploy to dev for inspection
+            VALUES="chart/tbs/values-dev.yaml"
+          fi
+
+          echo "tag=$TAG"           >> $GITHUB_OUTPUT
+          echo "namespace=$NAMESPACE" >> $GITHUB_OUTPUT
+          echo "values=$VALUES"     >> $GITHUB_OUTPUT
+          echo "Image tag: $TAG → namespace: $NAMESPACE"
+
+      # ── Java build ────────────────────────────────────────────────────────
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build JAR
+        run: mvn -B -DskipTests clean package
+
+      # ── Docker build & push ───────────────────────────────────────────────
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.target.outputs.tag }}
+
+      # ── Helm chart package & push ─────────────────────────────────────────
+      - name: Package Helm chart
+        run: |
+          helm package chart/tbs \
+            --version ${{ steps.target.outputs.tag }} \
+            --app-version ${{ steps.target.outputs.tag }}
+
+      - name: Push Helm chart to GHCR
+        run: |
+          helm push tbs-${{ steps.target.outputs.tag }}.tgz \
+            oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts
+
+      # ── Deploy to kind cluster ────────────────────────────────────────────
+      - name: Create namespace if missing
+        run: |
+          kubectl create namespace ${{ steps.target.outputs.namespace }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy via Helm
+        run: |
+          helm upgrade --install \
+            $(echo "${{ steps.target.outputs.namespace }}" | sed 's/tbs-//') \
+            chart/tbs \
+            -f ${{ steps.target.outputs.values }} \
+            --set image.tag=${{ steps.target.outputs.tag }} \
+            --namespace ${{ steps.target.outputs.namespace }} \
+            --wait --timeout 120s
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/tbs \
+            -n ${{ steps.target.outputs.namespace }} --timeout=90s
+          echo "✅ Deployed ${{ steps.target.outputs.tag }} to ${{ steps.target.outputs.namespace }}"

@@ -1,0 +1,55 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [develop, qa, master, "release/**"]
+
+jobs:
+  validate:
+    name: Validate PR
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate branch name
+        run: |
+          SOURCE="${{ github.head_ref }}"
+          TARGET="${{ github.base_ref }}"
+          echo "PR: $SOURCE → $TARGET"
+
+          # Allowed source branch patterns
+          if [[ "$SOURCE" =~ ^(feat|fix|chore)/[a-zA-Z0-9._-]+$ ]] && [[ "$TARGET" == "develop" ]]; then
+            echo "✅ Valid: feature/fix/chore → develop"
+
+          elif [[ "$SOURCE" == "develop" ]] && [[ "$TARGET" == "qa" ]]; then
+            echo "✅ Valid: develop → qa"
+
+          elif [[ "$SOURCE" == "qa" ]] && [[ "$TARGET" == "master" ]]; then
+            echo "✅ Valid: qa → master (prod promote)"
+
+          elif [[ "$SOURCE" =~ ^(patch|hotfix)/[a-zA-Z0-9._-]+$ ]] && [[ "$TARGET" =~ ^release/.+$ ]]; then
+            echo "✅ Valid: patch/hotfix → release/*"
+
+          elif [[ "$SOURCE" =~ ^release/.+$ ]] && [[ "$TARGET" =~ ^(qa|develop)$ ]]; then
+            echo "✅ Valid: release/* → qa/develop (forward-port)"
+
+          elif [[ "$SOURCE" == "qa" ]] && [[ "$TARGET" == "develop" ]]; then
+            echo "✅ Valid: qa → develop (auto-sync)"
+
+          else
+            echo "❌ Branch '$SOURCE' is not allowed to merge into '$TARGET'"
+            echo "See .ai/01-branching-strategy-context.md for allowed flows."
+            exit 1
+          fi
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build and test
+        run: mvn -B verify

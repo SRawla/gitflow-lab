@@ -1,0 +1,82 @@
+name: Promote to Environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (e.g. v2026.05.0)"
+        required: true
+        type: string
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - qa
+          - prod
+
+jobs:
+  promote:
+    name: Promote ${{ inputs.image_tag }} → ${{ inputs.environment }}
+    runs-on: self-hosted
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Resolve values file and namespace
+        id: resolve
+        run: |
+          ENV="${{ inputs.environment }}"
+          if [[ "$ENV" == "dev" ]];  then NS="tbs-dev";  VALUES="chart/tbs/values-dev.yaml";  fi
+          if [[ "$ENV" == "qa" ]];   then NS="tbs-qa";   VALUES="chart/tbs/values-qa.yaml";   fi
+          if [[ "$ENV" == "prod" ]]; then NS="tbs-prod"; VALUES="chart/tbs/values-prod.yaml"; fi
+          echo "namespace=$NS"   >> $GITHUB_OUTPUT
+          echo "values=$VALUES"  >> $GITHUB_OUTPUT
+
+      - name: Update image tag in values file
+        run: |
+          VALUES="${{ steps.resolve.outputs.values }}"
+          TAG="${{ inputs.image_tag }}"
+          # Replace the tag line in the values file
+          sed -i "s/^  tag: .*/  tag: \"${TAG}\"/" "$VALUES"
+          echo "Updated $VALUES → image.tag: $TAG"
+          grep "tag:" "$VALUES"
+
+      - name: Create promote branch and PR
+        run: |
+          BRANCH="chore/promote-${{ inputs.environment }}-${{ inputs.image_tag }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add ${{ steps.resolve.outputs.values }}
+          git commit -m "chore: promote ${{ inputs.image_tag }} to ${{ inputs.environment }}"
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "promote: ${{ inputs.image_tag }} → ${{ inputs.environment }}" \
+            --body "Automated promotion of \`${{ inputs.image_tag }}\` to **${{ inputs.environment }}**." \
+            --base develop \
+            --head "$BRANCH" \
+            --label "promote"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy directly to cluster (pre-merge preview)
+        run: |
+          helm upgrade --install \
+            ${{ inputs.environment }} \
+            chart/tbs \
+            -f ${{ steps.resolve.outputs.values }} \
+            --set image.tag=${{ inputs.image_tag }} \
+            --namespace ${{ steps.resolve.outputs.namespace }} \
+            --create-namespace \
+            --wait --timeout 120s
+          echo "✅ ${{ inputs.image_tag }} running in ${{ steps.resolve.outputs.namespace }}"

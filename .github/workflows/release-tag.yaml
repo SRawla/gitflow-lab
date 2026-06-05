@@ -1,0 +1,79 @@
+name: Cut Release Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_line:
+        description: "Release line to tag from (e.g. 2026.05)"
+        required: true
+        type: string
+      patch_number:
+        description: "Patch number (0 for major release, 1+ for patches)"
+        required: true
+        default: "0"
+        type: string
+
+jobs:
+  tag:
+    name: Cut v${{ inputs.release_line }}.${{ inputs.patch_number }}
+    runs-on: self-hosted
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve source branch
+        id: resolve
+        run: |
+          PATCH="${{ inputs.patch_number }}"
+          LINE="${{ inputs.release_line }}"
+          TAG="v${LINE}.${PATCH}"
+
+          if [[ "$PATCH" == "0" ]]; then
+            # Major release — tag from master
+            SOURCE="master"
+          else
+            # Patch release — tag from release/YYYY.MM
+            SOURCE="release/${LINE}"
+          fi
+
+          echo "tag=$TAG"       >> $GITHUB_OUTPUT
+          echo "source=$SOURCE" >> $GITHUB_OUTPUT
+          echo "Tagging $TAG from $SOURCE"
+
+      - name: Verify source branch exists
+        run: |
+          git fetch origin
+          git checkout ${{ steps.resolve.outputs.source }}
+
+      - name: Check tag does not already exist
+        run: |
+          TAG="${{ steps.resolve.outputs.tag }}"
+          if git tag | grep -q "^${TAG}$"; then
+            echo "❌ Tag $TAG already exists"
+            exit 1
+          fi
+          echo "✅ Tag $TAG is new"
+
+      - name: Create and push tag
+        run: |
+          TAG="${{ steps.resolve.outputs.tag }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+          echo "✅ Tag $TAG pushed"
+
+      - name: Create release/YYYY.MM branch (major release only)
+        if: inputs.patch_number == '0'
+        run: |
+          LINE="${{ inputs.release_line }}"
+          BRANCH="release/${LINE}"
+          git checkout -b "$BRANCH"
+          git push origin "$BRANCH"
+          echo "✅ Created long-lived branch $BRANCH"
