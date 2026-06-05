@@ -12,7 +12,7 @@ jobs:
     runs-on: self-hosted
     defaults:
       run:
-        shell: bash
+        shell: 'C:\Program Files\Git\bin\bash.exe {0}'
     permissions:
       contents: read
       issues: write
