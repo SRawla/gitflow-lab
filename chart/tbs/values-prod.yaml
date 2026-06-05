@@ -1,0 +1,19 @@
+# Prod environment — tbs-prod namespace — pinned to an immutable tag
+image:
+  tag: latest   # replaced by promote.yaml with vYYYY.MM.N tag
+
+replicaCount: 1
+
+ingress:
+  host: prod.tbs.local
+
+app:
+  springProfile: default
+
+# Prod uses an external Postgres (separately deployed), not the sub-chart
+db:
+  url: jdbc:postgresql://tbs-prod-postgresql:5432/tbs
+  username: tbs
+
+postgresql:
+  enabled: true   # still using bundled for this sandbox; switch to external for real prod

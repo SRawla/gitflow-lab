@@ -1,0 +1,18 @@
+# QA environment — tbs-qa namespace — tracks qa branch
+image:
+  tag: latest   # replaced by build-and-push.yaml with qa.{run}.{sha}
+
+replicaCount: 1
+
+ingress:
+  host: qa.tbs.local
+
+app:
+  springProfile: default
+
+db:
+  url: jdbc:postgresql://tbs-qa-postgresql:5432/tbs
+  username: tbs
+
+postgresql:
+  enabled: true

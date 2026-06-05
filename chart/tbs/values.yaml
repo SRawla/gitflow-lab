@@ -1,0 +1,71 @@
+# Default values — overridden by values-{dev,qa,prod}.yaml per environment
+
+image:
+  registry: ghcr.io
+  repository: srawla/tbs
+  tag: latest          # overwritten by CI workflow or promote.yaml
+  pullPolicy: Always
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: nginx
+  host: tbs.local      # overridden per env
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+livenessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 15
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8080
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  failureThreshold: 3
+
+# Application env vars (non-secret)
+app:
+  springProfile: default
+
+# Database — overridden per env
+db:
+  url: jdbc:postgresql://localhost:5432/tbs
+  username: tbs
+  # password comes from Secret, not here
+
+# PostgreSQL sub-chart (Bitnami) — enabled for dev/qa, disabled for prod
+postgresql:
+  enabled: true
+  auth:
+    database: tbs
+    username: tbs
+    password: tbs
+  primary:
+    persistence:
+      enabled: false    # ephemeral for dev/qa on a laptop cluster
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi

@@ -1,0 +1,18 @@
+# Dev environment — tbs-dev namespace — tracks develop branch
+image:
+  tag: latest   # replaced by build-and-push.yaml with develop.{run}.{sha}
+
+replicaCount: 1
+
+ingress:
+  host: dev.tbs.local
+
+app:
+  springProfile: default
+
+db:
+  url: jdbc:postgresql://tbs-dev-postgresql:5432/tbs
+  username: tbs
+
+postgresql:
+  enabled: true
