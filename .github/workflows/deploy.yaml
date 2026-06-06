@@ -1,0 +1,69 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy"
+        required: true
+        type: choice
+        options:
+          - dev
+          - qa
+          - prod
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/tbs
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment }}
+    runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Add Git Bash to PATH
+        shell: pwsh
+        run: echo "C:\Program Files\Git\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve namespace and values
+        id: resolve
+        run: |
+          ENV="${{ inputs.environment }}"
+          NS="tbs-${ENV}"
+          VALUES="chart/tbs/values-${ENV}.yaml"
+          TAG=$(grep 'tag:' "$VALUES" | head -1 | sed 's/.*tag: *"\?\([^"]*\)"\?/\1/')
+          echo "namespace=$NS"  >> $GITHUB_OUTPUT
+          echo "values=$VALUES" >> $GITHUB_OUTPUT
+          echo "tag=$TAG"       >> $GITHUB_OUTPUT
+          echo "🚀 Deploying tag: $TAG → namespace: $NS"
+
+      - name: Create namespace if missing
+        run: |
+          kubectl create namespace ${{ steps.resolve.outputs.namespace }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy via Helm
+        run: |
+          helm upgrade --install \
+            ${{ inputs.environment }} \
+            chart/tbs \
+            -f ${{ steps.resolve.outputs.values }} \
+            --set image.tag=${{ steps.resolve.outputs.tag }} \
+            --namespace ${{ steps.resolve.outputs.namespace }} \
+            --wait --timeout 120s
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/tbs \
+            -n ${{ steps.resolve.outputs.namespace }} --timeout=90s
+          echo "✅ Deployed ${{ steps.resolve.outputs.tag }} to ${{ steps.resolve.outputs.namespace }}"

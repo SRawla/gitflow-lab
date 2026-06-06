@@ -23,6 +23,9 @@ jobs:
           if [[ "$SOURCE" =~ ^(feat|fix|chore)/[a-zA-Z0-9._-]+$ ]] && [[ "$TARGET" == "develop" ]]; then
             echo "✅ Valid: feature/fix/chore → develop"
 
+          elif [[ "$SOURCE" =~ ^qa-promote/ ]] && [[ "$TARGET" == "qa" ]]; then
+            echo "✅ Valid: qa-promote/* → qa (auto cherry-pick)"
+
           elif [[ "$SOURCE" == "develop" ]] && [[ "$TARGET" == "qa" ]]; then
             echo "✅ Valid: develop → qa"
 
@@ -34,6 +37,15 @@ jobs:
 
           elif [[ "$SOURCE" =~ ^release/.+$ ]] && [[ "$TARGET" =~ ^(qa|develop)$ ]]; then
             echo "✅ Valid: release/* → qa/develop (forward-port)"
+
+          elif [[ "$SOURCE" =~ ^forward-port/ ]] && [[ "$TARGET" =~ ^(qa|develop)$ ]]; then
+            echo "✅ Valid: forward-port/* → qa/develop"
+
+          elif [[ "$SOURCE" =~ ^auto-sync/ ]] && [[ "$TARGET" == "develop" ]]; then
+            echo "✅ Valid: auto-sync/* → develop"
+
+          elif [[ "$SOURCE" =~ ^chore/promote- ]] && [[ "$TARGET" == "develop" ]]; then
+            echo "✅ Valid: chore/promote-* → develop"
 
           elif [[ "$SOURCE" == "qa" ]] && [[ "$TARGET" == "develop" ]]; then
             echo "✅ Valid: qa → develop (auto-sync)"

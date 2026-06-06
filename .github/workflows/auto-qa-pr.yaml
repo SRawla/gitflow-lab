@@ -1,0 +1,90 @@
+name: Auto QA PR
+
+# Fires on every push to develop (i.e. each squash-merge of a feature PR).
+# Cherry-picks that commit onto a branch from qa and opens a PR.
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  create-qa-pr:
+    name: Cherry-pick → QA PR
+    runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Add Git Bash to PATH
+        shell: pwsh
+        run: echo "C:\Program Files\Git\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Cherry-pick and open PR
+        run: |
+          COMMIT="${{ github.sha }}"
+          SHORT_SHA="${COMMIT:0:7}"
+          COMMIT_MSG=$(git log -1 --format='%s' "$COMMIT")
+
+          # Extract original branch name from squash commit message if possible
+          # Squash merges typically have format: "title (#PR_NUMBER)"
+          BRANCH_NAME="qa-promote/${SHORT_SHA}"
+
+          git fetch origin qa
+          git checkout -b "$BRANCH_NAME" origin/qa
+
+          # Cherry-pick the squash commit
+          if ! git cherry-pick "$COMMIT" --allow-empty; then
+            echo "❌ Cherry-pick conflict detected"
+            echo "Commit: $COMMIT_MSG ($SHORT_SHA)"
+            echo "Ops: ask the contributor to resolve conflicts manually"
+
+            # Abort and still open a draft PR to signal the conflict
+            git cherry-pick --abort
+            git commit --allow-empty -m "⚠️ CONFLICT: cherry-pick of $SHORT_SHA failed — manual resolution needed"
+            git push origin "$BRANCH_NAME"
+
+            gh pr create \
+              --title "⚠️ CONFLICT — promote to qa: $COMMIT_MSG" \
+              --body "Cherry-pick of \`$SHORT_SHA\` from develop failed due to conflicts.
+
+**Action required:** Contributor must resolve manually.
+- Source commit: \`$COMMIT\`
+- Message: $COMMIT_MSG
+
+Close this PR after a clean cherry-pick is submitted." \
+              --base qa \
+              --head "$BRANCH_NAME" \
+              --label "qa-promote,conflict" \
+              --draft
+            exit 0
+          fi
+
+          git push origin "$BRANCH_NAME"
+
+          gh pr create \
+            --title "promote to qa: $COMMIT_MSG" \
+            --body "Auto cherry-pick of [\`$SHORT_SHA\`](../commit/$COMMIT) from develop.
+
+**Original commit:** $COMMIT_MSG
+
+Merge when ready. Close/delete if this should not go to qa." \
+            --base qa \
+            --head "$BRANCH_NAME" \
+            --label "qa-promote"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
