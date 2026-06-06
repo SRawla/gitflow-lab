@@ -12,7 +12,7 @@ app:
 
 # Prod uses an external Postgres (separately deployed), not the sub-chart
 db:
-  url: jdbc:postgresql://tbs-prod-postgresql:5432/tbs
+  url: jdbc:postgresql://prod-postgresql:5432/tbs
   username: tbs
 
 postgresql:
