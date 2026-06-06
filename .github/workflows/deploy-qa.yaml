@@ -34,7 +34,6 @@ jobs:
 
       - name: Deploy via Helm
         run: |
-          helm dependency build chart/tbs
           helm upgrade --install qa chart/tbs \
             -f chart/tbs/values-qa.yaml \
             --set image.tag=${{ inputs.image_tag }} \
