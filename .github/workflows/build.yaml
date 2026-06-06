@@ -43,7 +43,7 @@ jobs:
           BRANCH="${{ inputs.branch }}"
           SHORT_SHA=$(git rev-parse --short=7 HEAD)
           RUN="${{ github.run_number }}"
-          TAG="${BRANCH}.${RUN}.${SHORT_SHA}"
+          TAG="${BRANCH}.${RUN}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "Image tag: $TAG"
 
