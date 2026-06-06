@@ -1,0 +1,47 @@
+name: Deploy PROD
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Release tag to deploy (e.g. v2026.06.0)"
+        required: true
+        type: string
+
+jobs:
+  deploy-prod:
+    name: "Deploy ${{ inputs.image_tag }} to PROD"
+    runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: read
+
+    steps:
+      - name: Add Git Bash to PATH
+        shell: pwsh
+        run: echo "C:\Program Files\Git\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Create namespace if missing
+        run: |
+          kubectl create namespace tbs-prod --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy via Helm
+        run: |
+          helm upgrade --install prod chart/tbs \
+            -f chart/tbs/values-prod.yaml \
+            --set image.tag=${{ inputs.image_tag }} \
+            --set image.pullPolicy=IfNotPresent \
+            --namespace tbs-prod \
+            --wait --timeout 120s
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/tbs -n tbs-prod --timeout=90s
+          echo "Deployed ${{ inputs.image_tag }} to tbs-prod (prod.tbs.local:8080)"

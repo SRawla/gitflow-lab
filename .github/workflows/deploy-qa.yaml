@@ -1,0 +1,47 @@
+name: Deploy QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (from build output)"
+        required: true
+        type: string
+
+jobs:
+  deploy-qa:
+    name: "Deploy ${{ inputs.image_tag }} to QA"
+    runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: read
+
+    steps:
+      - name: Add Git Bash to PATH
+        shell: pwsh
+        run: echo "C:\Program Files\Git\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: qa
+
+      - name: Create namespace if missing
+        run: |
+          kubectl create namespace tbs-qa --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy via Helm
+        run: |
+          helm upgrade --install qa chart/tbs \
+            -f chart/tbs/values-qa.yaml \
+            --set image.tag=${{ inputs.image_tag }} \
+            --set image.pullPolicy=IfNotPresent \
+            --namespace tbs-qa \
+            --wait --timeout 120s
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/tbs -n tbs-qa --timeout=90s
+          echo "Deployed ${{ inputs.image_tag }} to tbs-qa (qa.tbs.local:8080)"
