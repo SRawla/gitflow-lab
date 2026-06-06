@@ -1,4 +1,4 @@
-name: Sync qa → develop
+name: Sync qa to develop
 
 # Fires on every push to qa.
 # Opens a PR to merge qa into develop (GR1 guard rail).
@@ -10,7 +10,7 @@ on:
 
 jobs:
   sync:
-    name: Sync qa → develop
+    name: Sync qa to develop
     runs-on: self-hosted
     defaults:
       run:
@@ -51,9 +51,8 @@ jobs:
           git push origin "$BRANCH"
 
           PR_URL=$(gh pr create \
-            --title "auto-sync: qa → develop" \
-            --body "Automated sync of \`qa\` into \`develop\` (GR1 guard rail).
-Triggered by push to qa at commit \`${{ github.sha }}\`." \
+            --title "auto-sync: qa to develop" \
+            --body "Automated sync of qa into develop (GR1 guard rail). Triggered by push to qa at commit ${{ github.sha }}." \
             --base develop \
             --head "$BRANCH" \
             --label "auto-sync")
@@ -62,10 +61,10 @@ Triggered by push to qa at commit \`${{ github.sha }}\`." \
 
           # Auto-merge if clean (will fail gracefully if conflicts exist)
           gh pr merge "$PR_URL" --merge --auto || \
-            echo "⚠️ Auto-merge not possible — conflicts require manual resolution"
+            echo "Auto-merge not possible - conflicts require manual resolution"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Skip — develop already up to date
+      - name: Skip - develop already up to date
         if: steps.check.outputs.commits_ahead == '0'
-        run: echo "✅ develop is already up to date with qa — no sync needed"
+        run: echo "develop is already up to date with qa - no sync needed"
