@@ -4,9 +4,3 @@ description: GitFlow Lab — minimal Spring Boot service for branching strategy 
 type: application
 version: 0.0.1       # overridden by CI: helm package --version {BUILD_NUMBER}
 appVersion: "0.0.1"  # informational only
-
-dependencies:
-  - name: postgresql
-    version: "16.x.x"
-    repository: https://charts.bitnami.com/bitnami
-    condition: postgresql.enabled

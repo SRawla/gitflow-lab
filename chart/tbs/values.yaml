@@ -52,20 +52,10 @@ db:
   username: tbs
   # password comes from Secret, not here
 
-# PostgreSQL sub-chart (Bitnami) — enabled for dev/qa, disabled for prod
+# PostgreSQL — simple deployment using official image
 postgresql:
   enabled: true
-  auth:
-    database: tbs
-    username: tbs
-    password: tbs
-  primary:
-    persistence:
-      enabled: false    # ephemeral for dev/qa on a laptop cluster
-    resources:
-      requests:
-        cpu: 100m
-        memory: 128Mi
-      limits:
-        cpu: 200m
-        memory: 256Mi
+  image: postgres:16-alpine
+  database: tbs
+  username: tbs
+  password: tbs
