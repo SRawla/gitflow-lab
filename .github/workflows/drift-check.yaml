@@ -1,10 +1,9 @@
 name: Drift Check
 
-# Daily cron — alerts if develop has fallen behind qa (GR3 guard rail)
 on:
   schedule:
-    - cron: "0 9 * * *"   # 09:00 UTC every day
-  workflow_dispatch:        # allow manual trigger for testing
+    - cron: "0 9 * * *"
+  workflow_dispatch:
 
 jobs:
   drift-check:
@@ -35,11 +34,10 @@ jobs:
         run: |
           BEHIND=$(git log origin/develop..origin/qa --oneline | wc -l | tr -d ' ')
           echo "drift_count=$BEHIND" >> $GITHUB_OUTPUT
-
           if [[ "$BEHIND" -gt "0" ]]; then
-            echo "⚠️ develop is $BEHIND commits behind qa"
+            echo "develop is $BEHIND commits behind qa"
           else
-            echo "✅ develop is in sync with qa"
+            echo "develop is in sync with qa"
           fi
 
       - name: Open GitHub issue if drifted
@@ -49,16 +47,11 @@ jobs:
           EXISTING=$(gh issue list --label "drift-alert" --state open --json number --jq '.[0].number')
 
           if [[ -n "$EXISTING" ]]; then
-            echo "Issue #$EXISTING already open — skipping duplicate"
+            echo "Issue #$EXISTING already open - skipping duplicate"
           else
             gh issue create \
-              --title "⚠️ Drift detected: develop is ${COUNT} commits behind qa" \
-              --body "**Drift alert** — \`develop\` has fallen behind \`qa\` by ${COUNT} commits.
-
-**Action required:** Check if \`sync-qa-to-develop\` workflow failed or was skipped.
-Run the sync manually or open a PR from \`qa\` → \`develop\`.
-
-_Auto-detected by drift-check workflow on $(date -u +%Y-%m-%d)_" \
+              --title "Drift detected: develop is ${COUNT} commits behind qa" \
+              --body "develop has fallen behind qa by ${COUNT} commits. Check if sync-qa-to-develop workflow failed or was skipped. Run the sync manually or open a PR from qa to develop. Auto-detected on $(date -u +%Y-%m-%d)." \
               --label "drift-alert"
           fi
         env:
@@ -69,7 +62,7 @@ _Auto-detected by drift-check workflow on $(date -u +%Y-%m-%d)_" \
         run: |
           EXISTING=$(gh issue list --label "drift-alert" --state open --json number --jq '.[0].number')
           if [[ -n "$EXISTING" ]]; then
-            gh issue close "$EXISTING" --comment "✅ Drift resolved — develop is back in sync with qa."
+            gh issue close "$EXISTING" --comment "Drift resolved - develop is back in sync with qa."
             echo "Closed drift issue #$EXISTING"
           fi
         env:

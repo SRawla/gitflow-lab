@@ -1,7 +1,5 @@
 name: Forward Port on Tag
 
-# Fires whenever an immutable release tag is pushed (e.g. v2026.05.1)
-# Opens auto-PRs merging the release branch back into qa and develop
 on:
   push:
     tags:
@@ -9,7 +7,7 @@ on:
 
 jobs:
   forward-port:
-    name: Forward port ${{ github.ref_name }}
+    name: "Forward port ${{ github.ref_name }}"
     runs-on: self-hosted
     defaults:
       run:
@@ -32,9 +30,9 @@ jobs:
       - name: Resolve release line from tag
         id: resolve
         run: |
-          TAG="${{ github.ref_name }}"           # e.g. v2026.05.1
-          LINE="${TAG#v}"                         # e.g. 2026.05.1
-          MAJOR=$(echo "$LINE" | cut -d. -f1,2)  # e.g. 2026.05
+          TAG="${{ github.ref_name }}"
+          LINE="${TAG#v}"
+          MAJOR=$(echo "$LINE" | cut -d. -f1,2)
           SOURCE="release/${MAJOR}"
           echo "release_line=$MAJOR"  >> $GITHUB_OUTPUT
           echo "source=$SOURCE"       >> $GITHUB_OUTPUT
@@ -42,7 +40,7 @@ jobs:
       - name: Fetch all branches
         run: git fetch --all
 
-      - name: Open forward-port PR → qa
+      - name: Open forward-port PR to qa
         run: |
           SOURCE="${{ steps.resolve.outputs.source }}"
           TAG="${{ github.ref_name }}"
@@ -53,18 +51,15 @@ jobs:
           git push origin "$BRANCH"
 
           gh pr create \
-            --title "forward-port: $TAG → qa" \
-            --body "Auto forward-port of release branch \`${SOURCE}\` after tag \`${TAG}\`.
-
-This ensures qa gets all patches from this release line.
-**Review and merge — do not close.**" \
+            --title "forward-port: $TAG to qa" \
+            --body "Auto forward-port of release branch ${SOURCE} after tag ${TAG}. This ensures qa gets all patches from this release line. Review and merge." \
             --base qa \
             --head "$BRANCH" \
             --label "forward-port"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Open forward-port PR → develop
+      - name: Open forward-port PR to develop
         run: |
           SOURCE="${{ steps.resolve.outputs.source }}"
           TAG="${{ github.ref_name }}"
@@ -75,11 +70,8 @@ This ensures qa gets all patches from this release line.
           git push origin "$BRANCH"
 
           gh pr create \
-            --title "forward-port: $TAG → develop" \
-            --body "Auto forward-port of release branch \`${SOURCE}\` after tag \`${TAG}\`.
-
-This ensures develop gets all patches from this release line.
-**Review and merge — do not close.**" \
+            --title "forward-port: $TAG to develop" \
+            --body "Auto forward-port of release branch ${SOURCE} after tag ${TAG}. This ensures develop gets all patches from this release line. Review and merge." \
             --base develop \
             --head "$BRANCH" \
             --label "forward-port"

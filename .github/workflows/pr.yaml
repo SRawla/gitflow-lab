@@ -7,7 +7,7 @@ on:
 jobs:
   validate:
     name: Validate PR
-    runs-on: ubuntu-latest   # GitHub-hosted — safe for public repo PRs from forks
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -17,41 +17,40 @@ jobs:
         run: |
           SOURCE="${{ github.head_ref }}"
           TARGET="${{ github.base_ref }}"
-          echo "PR: $SOURCE → $TARGET"
+          echo "PR: $SOURCE -> $TARGET"
 
-          # Allowed source branch patterns
           if [[ "$SOURCE" =~ ^(feat|fix|chore)/[a-zA-Z0-9._-]+$ ]] && [[ "$TARGET" == "develop" ]]; then
-            echo "✅ Valid: feature/fix/chore → develop"
+            echo "Valid: feature/fix/chore -> develop"
 
           elif [[ "$SOURCE" =~ ^qa-promote/ ]] && [[ "$TARGET" == "qa" ]]; then
-            echo "✅ Valid: qa-promote/* → qa (auto cherry-pick)"
+            echo "Valid: qa-promote/* -> qa (auto cherry-pick)"
 
           elif [[ "$SOURCE" == "develop" ]] && [[ "$TARGET" == "qa" ]]; then
-            echo "✅ Valid: develop → qa"
+            echo "Valid: develop -> qa"
 
           elif [[ "$SOURCE" == "qa" ]] && [[ "$TARGET" == "master" ]]; then
-            echo "✅ Valid: qa → master (prod promote)"
+            echo "Valid: qa -> master (prod promote)"
 
           elif [[ "$SOURCE" =~ ^(patch|hotfix)/[a-zA-Z0-9._-]+$ ]] && [[ "$TARGET" =~ ^release/.+$ ]]; then
-            echo "✅ Valid: patch/hotfix → release/*"
+            echo "Valid: patch/hotfix -> release/*"
 
           elif [[ "$SOURCE" =~ ^release/.+$ ]] && [[ "$TARGET" =~ ^(qa|develop)$ ]]; then
-            echo "✅ Valid: release/* → qa/develop (forward-port)"
+            echo "Valid: release/* -> qa/develop (forward-port)"
 
           elif [[ "$SOURCE" =~ ^forward-port/ ]] && [[ "$TARGET" =~ ^(qa|develop)$ ]]; then
-            echo "✅ Valid: forward-port/* → qa/develop"
+            echo "Valid: forward-port/* -> qa/develop"
 
           elif [[ "$SOURCE" =~ ^auto-sync/ ]] && [[ "$TARGET" == "develop" ]]; then
-            echo "✅ Valid: auto-sync/* → develop"
+            echo "Valid: auto-sync/* -> develop"
 
           elif [[ "$SOURCE" =~ ^chore/promote- ]] && [[ "$TARGET" == "develop" ]]; then
-            echo "✅ Valid: chore/promote-* → develop"
+            echo "Valid: chore/promote-* -> develop"
 
           elif [[ "$SOURCE" == "qa" ]] && [[ "$TARGET" == "develop" ]]; then
-            echo "✅ Valid: qa → develop (auto-sync)"
+            echo "Valid: qa -> develop (auto-sync)"
 
           else
-            echo "❌ Branch '$SOURCE' is not allowed to merge into '$TARGET'"
+            echo "ERROR: Branch '$SOURCE' is not allowed to merge into '$TARGET'"
             echo "See .ai/01-branching-strategy-context.md for allowed flows."
             exit 1
           fi

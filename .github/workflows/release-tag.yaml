@@ -15,7 +15,7 @@ on:
 
 jobs:
   tag:
-    name: Cut v${{ inputs.release_line }}.${{ inputs.patch_number }}
+    name: "Cut v${{ inputs.release_line }}.${{ inputs.patch_number }}"
     runs-on: self-hosted
     defaults:
       run:
@@ -42,10 +42,8 @@ jobs:
           TAG="v${LINE}.${PATCH}"
 
           if [[ "$PATCH" == "0" ]]; then
-            # Major release — tag from master
             SOURCE="master"
           else
-            # Patch release — tag from release/YYYY.MM
             SOURCE="release/${LINE}"
           fi
 
@@ -62,10 +60,10 @@ jobs:
         run: |
           TAG="${{ steps.resolve.outputs.tag }}"
           if git tag | grep -q "^${TAG}$"; then
-            echo "❌ Tag $TAG already exists"
+            echo "ERROR: Tag $TAG already exists"
             exit 1
           fi
-          echo "✅ Tag $TAG is new"
+          echo "Tag $TAG is new"
 
       - name: Create and push tag
         run: |
@@ -74,13 +72,13 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
-          echo "✅ Tag $TAG pushed"
+          echo "Tag $TAG pushed"
 
-      - name: Create release/YYYY.MM branch (major release only)
+      - name: Create release branch (major release only)
         if: inputs.patch_number == '0'
         run: |
           LINE="${{ inputs.release_line }}"
           BRANCH="release/${LINE}"
           git checkout -b "$BRANCH"
           git push origin "$BRANCH"
-          echo "✅ Created long-lived branch $BRANCH"
+          echo "Created long-lived branch $BRANCH"
