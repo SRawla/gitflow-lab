@@ -24,3 +24,7 @@ logs/
 
 ### Spring Boot
 spring-shell.log
+
+### Helm dependencies
+chart/*/charts/
+chart/*/Chart.lock
