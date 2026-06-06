@@ -55,7 +55,7 @@ jobs:
           cache: maven
 
       - name: Build JAR
-        run: mvn -B -DskipTests clean package
+        run: ./mvnw -B -DskipTests clean package
 
       - name: Build Docker image
         run: |
