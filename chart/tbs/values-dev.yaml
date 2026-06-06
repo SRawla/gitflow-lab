@@ -11,7 +11,7 @@ app:
   springProfile: default
 
 db:
-  url: jdbc:postgresql://tbs-dev-postgresql:5432/tbs
+  url: jdbc:postgresql://dev-postgresql:5432/tbs
   username: tbs
 
 postgresql:
