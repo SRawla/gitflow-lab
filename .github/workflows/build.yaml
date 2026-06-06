@@ -28,9 +28,11 @@ jobs:
       packages: write
 
     steps:
-      - name: Add Git Bash to PATH
+      - name: Add Git Bash and Maven to PATH
         shell: pwsh
-        run: echo "C:\Program Files\Git\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        run: |
+          echo "C:\Program Files\Git\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\Users\srawla\scoop\apps\maven\current\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Checkout
         uses: actions/checkout@v4
