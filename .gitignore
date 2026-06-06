@@ -3,14 +3,7 @@ target/
 !.mvn/wrapper/maven-wrapper.jar
 
 ### IntelliJ IDEA
-# Commit: misc.xml, compiler.xml, encodings.xml
-# Ignore: workspace, shelf, http requests, datasources
-.idea/workspace.xml
-.idea/shelf/
-.idea/queries/
-.idea/httpRequests/
-.idea/dataSources/
-.idea/dataSources.local.xml
+.idea/
 *.iml
 
 ### VS Code
