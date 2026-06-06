@@ -43,5 +43,5 @@ jobs:
 
       - name: Verify deployment
         run: |
-          kubectl rollout status deployment/tbs -n tbs-dev --timeout=90s
+          kubectl rollout status deployment/dev -n tbs-dev --timeout=90s
           echo "Deployed ${{ inputs.image_tag }} to tbs-dev (dev.tbs.local:8080)"
