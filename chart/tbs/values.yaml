@@ -30,17 +30,17 @@ livenessProbe:
   httpGet:
     path: /actuator/health
     port: 8080
-  initialDelaySeconds: 30
+  initialDelaySeconds: 90
   periodSeconds: 15
-  failureThreshold: 3
+  failureThreshold: 5
 
 readinessProbe:
   httpGet:
     path: /actuator/health
     port: 8080
-  initialDelaySeconds: 20
+  initialDelaySeconds: 60
   periodSeconds: 10
-  failureThreshold: 3
+  failureThreshold: 5
 
 # Application env vars (non-secret)
 app:

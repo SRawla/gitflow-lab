@@ -39,7 +39,7 @@ jobs:
             --set image.tag=${{ inputs.image_tag }} \
             --set image.pullPolicy=IfNotPresent \
             --namespace tbs-dev \
-            --wait --timeout 120s
+            --wait --timeout 180s
 
       - name: Verify deployment
         run: |
