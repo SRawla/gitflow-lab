@@ -1,0 +1,60 @@
+name: "Release: Open QA → Master PR"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  open-pr:
+    name: Open release PR
+    runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Add Git Bash to PATH
+        shell: pwsh
+        run: echo "C:\Program Files\Git\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate and open PR
+        run: |
+          git fetch origin master qa
+
+          # Check if qa is ahead of master
+          AHEAD=$(git rev-list --count origin/master..origin/qa)
+          if [ "$AHEAD" -eq 0 ]; then
+            echo "::error::qa has no new commits over master. Nothing to release."
+            exit 1
+          fi
+
+          # Derive version from current month
+          VERSION=$(date +%Y.%m)
+          COMMIT_LOG=$(git log --oneline origin/master..origin/qa | head -20)
+
+          gh pr create \
+            --title "Release v${VERSION}.0 — promote QA to master" \
+            --body "## Release promotion: qa → master
+
+          **Commits ahead:** ${AHEAD}
+
+          <details><summary>Commit log (max 20)</summary>
+
+          \`\`\`
+          ${COMMIT_LOG}
+          \`\`\`
+          </details>
+
+          **After merge:** run the \`Release: Tag + Fork\` workflow with version \`${VERSION}\`." \
+            --base master \
+            --head qa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

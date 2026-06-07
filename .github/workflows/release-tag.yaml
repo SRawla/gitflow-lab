@@ -1,0 +1,70 @@
+name: "Release: Tag + Fork"
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (YYYY.MM format, e.g. 2026.06)"
+        required: true
+        type: string
+
+jobs:
+  tag-and-fork:
+    name: "Cut v${{ inputs.version }}.0 + fork release/${{ inputs.version }}"
+    runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: write
+
+    steps:
+      - name: Add Git Bash to PATH
+        shell: pwsh
+        run: echo "C:\Program Files\Git\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Validate
+        run: |
+          VERSION="${{ inputs.version }}"
+          TAG="v${VERSION}.0"
+          BRANCH="release/${VERSION}"
+
+          # Check tag doesn't already exist
+          if git tag -l "$TAG" | grep -q .; then
+            echo "::error::Tag $TAG already exists."
+            exit 1
+          fi
+
+          # Check release branch doesn't already exist
+          if git branch -r | grep -q "origin/${BRANCH}$"; then
+            echo "::error::Branch $BRANCH already exists."
+            exit 1
+          fi
+
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Cut tag and fork release branch
+        run: |
+          # Tag master HEAD
+          git tag -a "$TAG" -m "Release $VERSION"
+          git push origin "$TAG"
+          echo "✅ Tag $TAG created"
+
+          # Fork release branch from the tag
+          git branch "$BRANCH" "$TAG"
+          git push -u origin "$BRANCH"
+          echo "✅ Branch $BRANCH forked from $TAG"
