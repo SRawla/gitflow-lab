@@ -1,0 +1,98 @@
+name: "GR1: Sync QA → Develop"
+
+on:
+  push:
+    branches:
+      - qa
+
+jobs:
+  forward-port:
+    name: Cherry-pick to develop
+    runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Add Git Bash to PATH
+        shell: pwsh
+        run: echo "C:\Program Files\Git\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Cherry-pick and open PR
+        run: |
+          COMMIT="${{ github.sha }}"
+          SHORT_SHA="${COMMIT:0:7}"
+          COMMIT_MSG=$(git log -1 --format='%s' "$COMMIT")
+
+          # Loop prevention: skip commits that came from auto-qa-pr (develop → qa)
+          if [[ "$COMMIT_MSG" == *"[auto-promote]"* ]]; then
+            echo "Skipping: commit is an auto-promote from develop, no need to sync back"
+            exit 0
+          fi
+
+          BRANCH_NAME="forward-port/${SHORT_SHA}"
+
+          git fetch origin develop
+          git checkout -b "$BRANCH_NAME" origin/develop
+
+          if ! git cherry-pick "$COMMIT" --allow-empty; then
+            echo "Cherry-pick conflict detected"
+            git cherry-pick --abort
+            git checkout -- . 2>/dev/null || true
+
+            # Get conflicting files from the failed cherry-pick attempt
+            git cherry-pick "$COMMIT" --no-commit 2>/dev/null || true
+            CONFLICTS=$(git diff --name-only --diff-filter=U 2>/dev/null || echo "unknown")
+            git reset --hard
+
+            git commit --allow-empty -m "[forward-port] CONFLICT: $COMMIT_MSG"
+            git push origin "$BRANCH_NAME"
+
+            # Get original commit author
+            AUTHOR=$(git log -1 --format='%an' "$COMMIT")
+
+            gh pr create \
+              --title "[forward-port] CONFLICT: $COMMIT_MSG" \
+              --body "Cherry-pick of \`$SHORT_SHA\` from qa failed due to conflicts.
+
+**Author:** $AUTHOR
+**Source commit:** $COMMIT
+**Conflicting files:**
+\`\`\`
+$CONFLICTS
+\`\`\`
+
+Please resolve manually." \
+              --base develop \
+              --head "$BRANCH_NAME" \
+              --draft \
+              --label "conflict"
+            exit 0
+          fi
+
+          # Amend commit message with [forward-port] prefix
+          git commit --amend -m "[forward-port] $COMMIT_MSG"
+          git push origin "$BRANCH_NAME"
+
+          gh pr create \
+            --title "[forward-port] $COMMIT_MSG" \
+            --body "Auto cherry-pick of \`$SHORT_SHA\` from qa → develop.
+Merge to keep develop in sync with qa bugfixes." \
+            --base develop \
+            --head "$BRANCH_NAME"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
