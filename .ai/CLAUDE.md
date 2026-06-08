@@ -4,10 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A personal sandbox to practically validate the **SkyHive Branching Strategy v2 (Model C)** end-to-end on a minimal Spring Boot + PostgreSQL service running on a local `kind` cluster, with real GitHub Actions on a self-hosted runner. The app itself is intentionally trivial — the value is in the workflow.
+A personal sandbox to practically validate the **Branching Strategy v2 (Model C)** end-to-end on a minimal Spring Boot + PostgreSQL service running on a local `kind` cluster, with real GitHub Actions on a self-hosted runner. The app itself is intentionally trivial — the value is in the workflow.
 
 - **Owner / sole reviewer:** suleman.ravla@gmail.com (self-approves PRs — deliberate, documented deviation from the two-approver production strategy)
-- **Strategy reference doc:** `C:\SkyHive\ENT-2-0\CodeBase\.helper-resource\branching-strategy-v2\branching-strategy-guide.html`
 - **Deeper context:** [`01-branching-strategy-context.md`](./01-branching-strategy-context.md) (branches, workflows, guard rails, validation phases) and [`02-codebase-context.md`](./02-codebase-context.md) (domain model, project structure, Helm, image tagging)
 
 ---

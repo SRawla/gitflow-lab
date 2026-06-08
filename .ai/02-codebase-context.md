@@ -134,7 +134,7 @@ test-branching-strategy/
 └── README.md
 ```
 
-Package convention: `com.sh.tbs` (sh = SkyHive, tbs = test-branching-strategy).
+Package convention: `com.sh.tbs` (tbs = test-branching-strategy).
 
 ---
 

@@ -1,6 +1,6 @@
 # test-branching-strategy
 
-A personal sandbox to **practically validate** the SkyHive Branching Strategy v2 (Model C) end-to-end on a tiny Spring Boot + Postgres service running on local Kubernetes (`kind`), with real GitHub Actions wired to a self-hosted runner.
+A personal sandbox to **practically validate** a Branching Strategy (Model C) end-to-end on a tiny Spring Boot + Postgres service running on local Kubernetes (`kind`), with real GitHub Actions wired to a self-hosted runner.
 
 > The actual app is intentionally minimal — the value is in the workflow, not the code.
 
@@ -20,7 +20,7 @@ Spring Boot 3.x · Java 21 · Maven · PostgreSQL 16 · Docker → ghcr.io · ki
 
 ## Status
 
-Pre-scaffold. Context docs only. Next step: Phase 1 setup (app + Dockerfile + Helm chart + kind cluster + base workflows).
+Active. App scaffolded (Spring Boot + JPA + Flyway), all workflow actions implemented, local kind cluster running with dev/qa/prod namespaces. Currently validating the full release cycle end-to-end.
 
 ---
 
@@ -30,7 +30,7 @@ The whole exercise to understand the correct branching strategy and required wor
 
 ```
 ═══════════════════════════════════════════════════════════════════════════════════════════════
-                    SkyHive Branching Strategy v2 — Complete Flow Refcard
+                    Branching Strategy v2 — Complete Flow Refcard
 ═══════════════════════════════════════════════════════════════════════════════════════════════
 
 
@@ -193,6 +193,30 @@ The whole exercise to understand the correct branching strategy and required wor
     │ sync-qa-to-develop   │ Push to qa → cherry-pick PR to develop     │
     │ pr.yaml              │ Any PR → validates branch name + CI        │
     └──────────────────────┴────────────────────────────────────────────┘
+
+
+══ ROLES — WHO TRIGGERS WHAT ══════════════════════════════════════════════════════════════════
+
+    ┌──────────────────────┬─────────────┬─────────────────────────────────────────┐
+    │ Workflow              │ Role        │ Context                                 │
+    ├──────────────────────┼─────────────┼─────────────────────────────────────────┤
+    │ build.yaml           │ Dev / Ops   │ Build image from any branch or tag      │
+    │ deploy-dev.yaml      │ Dev         │ Deploy to dev for integration testing   │
+    │ deploy-qa.yaml       │ Dev / Ops   │ Deploy to qa for QE testing             │
+    │ release-pr.yaml      │ Tech Lead   │ Initiates release when QA cycle ends    │
+    │ release-tag.yaml     │ Tech Lead   │ Cuts tag + forks release branch         │
+    │ patch-tag.yaml       │ Tech Lead   │ Cuts patch tag after hotfix/patch merge │
+    │ deploy-prod.yaml     │ Ops         │ Deploys specific tag to production      │
+    └──────────────────────┴─────────────┴─────────────────────────────────────────┘
+
+    AUTO (no human trigger):
+    ┌──────────────────────┬──────────────────────────────────────────────────────┐
+    │ build-on-tag.yaml    │ System builds image when tag is pushed               │
+    │ forward-port.yaml    │ System opens PRs to sync fix to qa + develop         │
+    │ auto-qa-pr.yaml      │ System cherry-picks develop commits to qa            │
+    │ sync-qa-to-develop   │ System cherry-picks qa fixes back to develop         │
+    │ pr.yaml              │ System validates branch naming + runs CI             │
+    └──────────────────────┴──────────────────────────────────────────────────────┘
 
 ═══════════════════════════════════════════════════════════════════════════════════════════════
 ```
