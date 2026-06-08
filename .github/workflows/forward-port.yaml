@@ -33,15 +33,15 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Forward-port release branch to qa and develop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.ref_name }}"
-          # Extract YYYY.MM from tag (vYYYY.MM.N)
           VERSION=$(echo "$TAG" | sed 's/^v\([0-9]\{4\}\.[0-9]\{2\}\)\..*$/\1/')
           RELEASE_BRANCH="release/${VERSION}"
 
           git fetch origin "$RELEASE_BRANCH" qa develop
 
-          # Verify release branch exists
           if ! git rev-parse "origin/${RELEASE_BRANCH}" &>/dev/null; then
             echo "::error::Release branch $RELEASE_BRANCH not found"
             exit 1
@@ -52,40 +52,36 @@ jobs:
           for TARGET in "${TARGETS[@]}"; do
             FP_BRANCH="forward-port/${VERSION}-to-${TARGET}-${TAG}"
 
-            echo "--- Forward-porting $RELEASE_BRANCH → $TARGET ---"
+            echo "--- Forward-porting $RELEASE_BRANCH to $TARGET ---"
 
             git checkout -b "$FP_BRANCH" "origin/${TARGET}"
 
-            if git merge --no-ff "origin/${RELEASE_BRANCH}" -m "[forward-port] ${RELEASE_BRANCH} → ${TARGET} (${TAG})"; then
+            if git merge --no-ff "origin/${RELEASE_BRANCH}" -m "[forward-port] ${RELEASE_BRANCH} to ${TARGET} (${TAG})"; then
               git push origin "$FP_BRANCH"
-              gh pr create \
-                --title "[forward-port] ${RELEASE_BRANCH} → ${TARGET} (${TAG})" \
-                --body "Auto forward-port triggered by tag \`${TAG}\`.
 
-Carries all patches from \`${RELEASE_BRANCH}\` into \`${TARGET}\`.
-Auto-merge if clean, resolve conflicts manually if not." \
+              BODY="Auto forward-port triggered by tag \`${TAG}\`. Carries all patches from \`${RELEASE_BRANCH}\` into \`${TARGET}\`. Auto-merge if clean, resolve conflicts manually if not."
+
+              gh pr create \
+                --title "[forward-port] ${RELEASE_BRANCH} to ${TARGET} (${TAG})" \
+                --body "$BODY" \
                 --base "$TARGET" \
-                --head "$FP_BRANCH" \
-                --label "forward-port"
-              echo "✅ PR opened: $FP_BRANCH → $TARGET"
+                --head "$FP_BRANCH"
+              echo "PR opened: $FP_BRANCH to $TARGET"
             else
-              # Conflict — push what we have and open draft PR
               git add -A
               git commit --no-edit || true
               git push origin "$FP_BRANCH"
-              gh pr create \
-                --title "[forward-port] CONFLICT: ${RELEASE_BRANCH} → ${TARGET} (${TAG})" \
-                --body "Auto forward-port triggered by tag \`${TAG}\`.
 
-**Merge conflicts detected.** Resolve manually." \
+              BODY="Auto forward-port triggered by tag \`${TAG}\`. Merge conflicts detected. Resolve manually."
+
+              gh pr create \
+                --title "[forward-port] CONFLICT: ${RELEASE_BRANCH} to ${TARGET} (${TAG})" \
+                --body "$BODY" \
                 --base "$TARGET" \
                 --head "$FP_BRANCH" \
-                --draft \
-                --label "forward-port,conflict"
-              echo "⚠️ Conflict PR opened: $FP_BRANCH → $TARGET"
+                --draft
+              echo "Conflict PR opened: $FP_BRANCH to $TARGET"
             fi
 
             git checkout --detach
           done
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

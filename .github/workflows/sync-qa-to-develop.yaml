@@ -1,4 +1,4 @@
-name: "GR1: Sync QA → Develop"
+name: "GR1: Sync QA to Develop"
 
 on:
   push:
@@ -33,12 +33,14 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Cherry-pick and open PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           COMMIT="${{ github.sha }}"
           SHORT_SHA="${COMMIT:0:7}"
           COMMIT_MSG=$(git log -1 --format='%s' "$COMMIT")
 
-          # Loop prevention: skip commits that came from auto-qa-pr (develop → qa)
+          # Loop prevention: skip commits that came from auto-qa-pr (develop -> qa)
           if [[ "$COMMIT_MSG" == *"[auto-promote]"* ]]; then
             echo "Skipping: commit is an auto-promote from develop, no need to sync back"
             exit 0
@@ -54,45 +56,32 @@ jobs:
             git cherry-pick --abort
             git checkout -- . 2>/dev/null || true
 
-            # Get conflicting files from the failed cherry-pick attempt
-            git cherry-pick "$COMMIT" --no-commit 2>/dev/null || true
-            CONFLICTS=$(git diff --name-only --diff-filter=U 2>/dev/null || echo "unknown")
-            git reset --hard
-
             git commit --allow-empty -m "[forward-port] CONFLICT: $COMMIT_MSG"
             git push origin "$BRANCH_NAME"
 
-            # Get original commit author
             AUTHOR=$(git log -1 --format='%an' "$COMMIT")
+
+            BODY="Cherry-pick of \`$SHORT_SHA\` from qa failed due to conflicts."
+            BODY="$BODY"$'\n\n'"**Author:** $AUTHOR"
+            BODY="$BODY"$'\n'"**Source commit:** $COMMIT"
+            BODY="$BODY"$'\n\n'"Please resolve manually."
 
             gh pr create \
               --title "[forward-port] CONFLICT: $COMMIT_MSG" \
-              --body "Cherry-pick of \`$SHORT_SHA\` from qa failed due to conflicts.
-
-**Author:** $AUTHOR
-**Source commit:** $COMMIT
-**Conflicting files:**
-\`\`\`
-$CONFLICTS
-\`\`\`
-
-Please resolve manually." \
+              --body "$BODY" \
               --base develop \
               --head "$BRANCH_NAME" \
-              --draft \
-              --label "conflict"
+              --draft
             exit 0
           fi
 
-          # Amend commit message with [forward-port] prefix
           git commit --amend -m "[forward-port] $COMMIT_MSG"
           git push origin "$BRANCH_NAME"
 
+          BODY="Auto cherry-pick of \`$SHORT_SHA\` from qa to develop. Merge to keep develop in sync with qa bugfixes."
+
           gh pr create \
             --title "[forward-port] $COMMIT_MSG" \
-            --body "Auto cherry-pick of \`$SHORT_SHA\` from qa → develop.
-Merge to keep develop in sync with qa bugfixes." \
+            --body "$BODY" \
             --base develop \
             --head "$BRANCH_NAME"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
