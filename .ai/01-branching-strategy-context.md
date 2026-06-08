@@ -20,6 +20,22 @@ Same structure as the real strategy. Four long-lived + temporary working branche
 | `release/YYYY.MM` | Long-lived per-release-line patch home (forked at each major release) | PR required, self-approval allowed, CI green |
 | `feat/TICKET-desc` | Temporary feature branch, off `develop` | none |
 | `fix/TICKET-desc` | Temporary bug branch, off `develop` or `qa` | none |
+
+#### PR validation — allowed merge flows (`pr.yaml`)
+
+| Source pattern | Target | Scenario |
+|---|---|---|
+| `feat/*`, `fix/*`, `chore/*` | develop | Standard feature/fix flow |
+| `fix/*` | qa | QA bug fix (created from qa) |
+| `qa-promote/*` | qa | Auto cherry-pick from develop |
+| `develop` | qa | Manual promote |
+| `qa` | master | Release promote |
+| `patch/*`, `hotfix/*` | release/* | Patch/hotfix flow |
+| `release/*` | qa, develop | Forward-port |
+| `forward-port/*` | qa, develop | Forward-port (auto) |
+| `auto-sync/*` | develop | GR1 sync |
+| `chore/promote-*` | develop | Auto-promote |
+| `qa` | develop | GR1 sync |
 | `chore/TICKET-desc` | Temporary tech-debt branch, off `develop` | none |
 | `patch/TICKET-desc` | Temporary patch branch, off a `release/YYYY.MM` | none |
 | `hotfix/TICKET-desc` | Temporary emergency branch, off a `release/YYYY.MM` | none |
@@ -67,13 +83,18 @@ All triggered by GitHub Actions, executed on a **self-hosted runner** on this la
 
 | Workflow file | Trigger | What it validates |
 |---|---|---|
-| `pr.yaml` | On PR | Branch-name regex + Maven verify + tests |
-| `build-and-push.yaml` | Push to `develop` / `qa` / `release/**` | Builds image, tags `{branchtype}.{run}.{sha}`, pushes to ghcr.io, deploys to the matching namespace via Helm |
-| `promote.yaml` | Manual dispatch | Promotes a chosen tag → chosen target env (writes to env values file, opens PR) |
-| `release-tag.yaml` | Manual dispatch OR after prod deploy | Cuts the next `vYYYY.MM.N` from `release/YYYY.MM` and pushes |
-| `forward-port.yaml` | Push of a tag matching `v[0-9]{4}.[0-9]{2}.*` | Opens auto-PRs `release/YYYY.MM → qa` and `→ develop` (and to any newer active release lines) |
-| `sync-qa-to-develop.yaml` | Push to `qa` | Opens auto-PR `qa → develop`, auto-merge if clean |
-| `drift-check.yaml` | Daily cron | Alerts if `develop` falls behind `qa` |
+| `pr.yaml` | On PR to develop/qa/master/release/** | Branch-name regex (allowed flows) + Maven verify |
+| `build.yaml` | Manual dispatch (input: ref) | Builds image from any branch/tag, loads into kind |
+| `build-on-tag.yaml` | Push of tag matching `v*` | Auto-builds image tagged with the version |
+| `deploy-dev.yaml` | Manual dispatch | Deploys specified image tag to tbs-dev |
+| `deploy-qa.yaml` | Manual dispatch | Deploys specified image tag to tbs-qa |
+| `deploy-prod.yaml` | Manual dispatch | Deploys specified tag to tbs-prod |
+| `release-pr.yaml` | Manual dispatch | Opens PR qa→master with commit count |
+| `release-tag.yaml` | Manual dispatch (input: YYYY.MM) | Cuts vYYYY.MM.0 from master + forks release/YYYY.MM |
+| `patch-tag.yaml` | Manual dispatch | Auto-increments vYYYY.MM.N from release branch |
+| `auto-qa-pr.yaml` | Push to develop | Cherry-picks commit to qa (opens PR) |
+| `sync-qa-to-develop.yaml` | Push to qa | GR1: Cherry-picks commit to develop (or opens conflict PR) |
+| `forward-port.yaml` | Push of tag matching `v*` | GR2: Opens PRs release→qa + develop |
 
 Workflows live in `.github/workflows/` once the app is scaffolded.
 

@@ -2,6 +2,8 @@ package com.sh.tbs.course;
 
 import com.sh.tbs.course.dto.CourseRequest;
 import com.sh.tbs.course.dto.CourseResponse;
+import com.sh.tbs.enrollment.EnrollRequest;
+import com.sh.tbs.enrollment.EnrollmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +20,7 @@ import java.util.UUID;
 public class CourseController {
 
     private final CourseService service;
+    private final EnrollmentService enrollmentService;
 
     @GetMapping
     public List<CourseResponse> list() {
