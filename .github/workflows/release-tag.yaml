@@ -53,6 +53,17 @@ jobs:
             exit 1
           fi
 
+          # Guard: master must be at same commit as qa (qa was merged to master via release-pr)
+          git fetch origin qa
+          MASTER_SHA=$(git rev-parse HEAD)
+          QA_SHA=$(git rev-parse origin/qa)
+          if [ "$MASTER_SHA" != "$QA_SHA" ]; then
+            echo "::error::master HEAD ($MASTER_SHA) != qa HEAD ($QA_SHA)."
+            echo "::error::Run the 'Release PR' workflow first to merge qa into master, then retry."
+            exit 1
+          fi
+          echo "✅ master == qa HEAD ($MASTER_SHA)"
+
           echo "TAG=$TAG" >> "$GITHUB_ENV"
           echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"

@@ -35,7 +35,6 @@ jobs:
 
       - name: Deploy via Helm
         run: |
-          kubectl rollout restart deployment/qa -n tbs-qa 2>/dev/null || true
           helm upgrade --install qa chart/tbs \
             -f chart/tbs/values-qa.yaml \
             --set image.tag=${{ inputs.image_tag }} \
@@ -47,3 +46,19 @@ jobs:
         run: |
           kubectl rollout status deployment/qa -n tbs-qa --timeout=90s
           echo "Deployed ${{ inputs.image_tag }} to tbs-qa (qa.tbs.local:8080)"
+
+      - name: Smoke test
+        run: |
+          echo "Waiting for app to become ready..."
+          for i in $(seq 1 12); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://qa.tbs.local:8080/actuator/health 2>/dev/null || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Smoke test passed — /actuator/health returned 200"
+              exit 0
+            fi
+            echo "  attempt $i: HTTP $STATUS — retrying in 5s..."
+            sleep 5
+          done
+          echo "::error::Smoke test failed — /actuator/health did not return 200 after 60s"
+          kubectl logs deployment/qa -n tbs-qa --tail=50
+          exit 1

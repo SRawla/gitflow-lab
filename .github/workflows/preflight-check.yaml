@@ -1,0 +1,196 @@
+name: Preflight Check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  preflight:
+    name: Preflight Check
+    runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: read
+
+    steps:
+      - name: Add Git Bash to PATH
+        shell: pwsh
+        run: echo "C:\Program Files\Git\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      # ── 1. Required CLI tools ──────────────────────────────────────────────
+      - name: Check required tools in PATH
+        run: |
+          MISSING=()
+          for tool in docker kubectl helm kind gh java mvn; do
+            if ! command -v $tool &>/dev/null; then
+              MISSING+=($tool)
+            else
+              echo "✅ $tool: $(command -v $tool)"
+            fi
+          done
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "❌ Missing tools: ${MISSING[*]}"
+            exit 1
+          fi
+          echo "✅ All required tools found"
+
+      # ── 2. kind cluster responsive ─────────────────────────────────────────
+      - name: Check kind cluster 'tbs' is running
+        run: |
+          if ! kind get clusters 2>/dev/null | grep -q "^tbs$"; then
+            echo "❌ kind cluster 'tbs' not found. Run: kind create cluster --name tbs"
+            exit 1
+          fi
+          echo "✅ kind cluster 'tbs' exists"
+          # Verify kubectl can reach it
+          if ! kubectl cluster-info --context kind-tbs &>/dev/null; then
+            echo "❌ kubectl cannot reach kind-tbs context"
+            exit 1
+          fi
+          echo "✅ kubectl connected to kind-tbs"
+
+      # ── 3. Namespaces ──────────────────────────────────────────────────────
+      - name: Check required namespaces
+        run: |
+          MISSING_NS=()
+          for ns in tbs-dev tbs-qa tbs-prod; do
+            if kubectl get namespace $ns &>/dev/null; then
+              echo "✅ namespace $ns exists"
+            else
+              echo "⚠️  namespace $ns missing — will be auto-created on first deploy"
+              MISSING_NS+=($ns)
+            fi
+          done
+          if [ ${#MISSING_NS[@]} -gt 0 ]; then
+            echo "ℹ️  Missing namespaces: ${MISSING_NS[*]} (non-fatal, deploy workflows create them)"
+          fi
+
+      # ── 4. ingress-nginx running ───────────────────────────────────────────
+      - name: Check ingress-nginx
+        run: |
+          if kubectl get namespace ingress-nginx &>/dev/null; then
+            READY=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller \
+              --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+            if [ "$READY" -gt 0 ]; then
+              echo "✅ ingress-nginx controller running ($READY pod(s))"
+            else
+              echo "❌ ingress-nginx namespace exists but controller pod not running"
+              kubectl get pods -n ingress-nginx --no-headers
+              exit 1
+            fi
+          else
+            echo "❌ ingress-nginx namespace not found. Install: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.0/deploy/static/provider/kind/deploy.yaml"
+            exit 1
+          fi
+
+      # ── 5. Pod health across all tbs namespaces ────────────────────────────
+      - name: Check pod health
+        run: |
+          FAILED=0
+          for ns in tbs-dev tbs-qa tbs-prod; do
+            if ! kubectl get namespace $ns &>/dev/null; then
+              echo "ℹ️  Skipping $ns (namespace does not exist)"
+              continue
+            fi
+            NOT_RUNNING=$(kubectl get pods -n $ns --no-headers 2>/dev/null \
+              | grep -v -E "Running|Completed" | grep -v "^$" || true)
+            if [ -n "$NOT_RUNNING" ]; then
+              echo "❌ Unhealthy pods in $ns:"
+              echo "$NOT_RUNNING"
+              FAILED=1
+            else
+              POD_COUNT=$(kubectl get pods -n $ns --no-headers 2>/dev/null | wc -l)
+              echo "✅ $ns: all pods healthy ($POD_COUNT running)"
+            fi
+          done
+          if [ "$FAILED" -eq 1 ]; then
+            exit 1
+          fi
+
+      # ── 6. Checkout repo (needed for mvnw check) ──────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 1
+
+      # ── 7. mvnw executable ────────────────────────────────────────────────
+      - name: Check mvnw is executable
+        run: |
+          if [ ! -f "./mvnw" ]; then
+            echo "❌ ./mvnw not found in repo root"
+            exit 1
+          fi
+          chmod +x ./mvnw
+          echo "✅ ./mvnw found and executable"
+          ./mvnw --version
+
+      # ── 8. Docker daemon ──────────────────────────────────────────────────
+      - name: Check Docker daemon
+        run: |
+          if ! docker info &>/dev/null; then
+            echo "❌ Docker daemon not responding"
+            exit 1
+          fi
+          echo "✅ Docker daemon running"
+          # Verify kind network is accessible
+          if docker network inspect kind &>/dev/null; then
+            echo "✅ Docker 'kind' network present"
+          else
+            echo "⚠️  Docker 'kind' network missing — kind cluster may need restart"
+          fi
+
+      # ── 9. GitHub labels ──────────────────────────────────────────────────
+      - name: Check required GitHub labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LABELS=$(gh label list --repo ${{ github.repository }} --limit 100 --json name --jq '.[].name')
+          MISSING_LABELS=()
+          for label in "drift-alert" "forward-port" "auto-sync" "qa-promote"; do
+            if echo "$LABELS" | grep -qx "$label"; then
+              echo "✅ label '$label' exists"
+            else
+              echo "❌ label '$label' missing"
+              MISSING_LABELS+=("$label")
+            fi
+          done
+          if [ ${#MISSING_LABELS[@]} -gt 0 ]; then
+            echo "❌ Missing labels: ${MISSING_LABELS[*]}"
+            echo "Fix: run the label creation commands documented in .ai/04-workflow-fixes.md A3"
+            exit 1
+          fi
+
+      # ── 10. Branch protection ─────────────────────────────────────────────
+      - name: Check branch protection on develop, qa, master
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPO="${{ github.repository }}"
+          FAILED=0
+          for branch in develop qa master; do
+            STATUS=$(gh api repos/$REPO/branches/$branch/protection \
+              --jq '.required_pull_request_reviews // "none"' 2>/dev/null || echo "MISSING")
+            if [ "$STATUS" = "MISSING" ]; then
+              echo "❌ Branch protection missing on '$branch'"
+              FAILED=1
+            else
+              FORCE_PUSH=$(gh api repos/$REPO/branches/$branch/protection \
+                --jq '.allow_force_pushes.enabled // false' 2>/dev/null)
+              echo "✅ Branch protection on '$branch' (force_push allowed: $FORCE_PUSH)"
+            fi
+          done
+          if [ "$FAILED" -eq 1 ]; then
+            echo "Fix: re-run branch protection setup from A2 in .ai/04-workflow-fixes.md"
+            exit 1
+          fi
+
+      # ── Summary ───────────────────────────────────────────────────────────
+      - name: Preflight passed
+        run: |
+          echo ""
+          echo "============================================"
+          echo "  ✅  All preflight checks passed"
+          echo "  Ready to build, deploy, and run workflows"
+          echo "============================================"
