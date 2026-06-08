@@ -35,12 +35,13 @@ jobs:
 
       - name: Deploy via Helm
         run: |
+          kubectl rollout restart deployment/prod -n tbs-prod 2>/dev/null || true
           helm upgrade --install prod chart/tbs \
             -f chart/tbs/values-prod.yaml \
             --set image.tag=${{ inputs.image_tag }} \
             --set image.pullPolicy=IfNotPresent \
             --namespace tbs-prod \
-            --force --wait --timeout 180s
+            --wait --timeout 180s
 
       - name: Verify deployment
         run: |

@@ -35,12 +35,13 @@ jobs:
 
       - name: Deploy via Helm
         run: |
+          kubectl rollout restart deployment/qa -n tbs-qa 2>/dev/null || true
           helm upgrade --install qa chart/tbs \
             -f chart/tbs/values-qa.yaml \
             --set image.tag=${{ inputs.image_tag }} \
             --set image.pullPolicy=IfNotPresent \
             --namespace tbs-qa \
-            --force --wait --timeout 180s
+            --wait --timeout 180s
 
       - name: Verify deployment
         run: |
