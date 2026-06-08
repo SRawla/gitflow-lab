@@ -2,6 +2,8 @@ package com.sh.tbs.course;
 
 import com.sh.tbs.course.dto.CourseRequest;
 import com.sh.tbs.course.dto.CourseResponse;
+import com.sh.tbs.enrollment.EnrollRequest;
+import com.sh.tbs.enrollment.EnrollmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -16,6 +18,7 @@ import java.util.UUID;
 public class CourseController {
 
     private final CourseService service;
+    private final EnrollmentService enrollmentService;
 
     @GetMapping
     public List<CourseResponse> list() {
@@ -42,5 +45,24 @@ public class CourseController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID id) {
         service.delete(id);
+    }
+
+    // --- Enrollment endpoints (Feature 2) ---
+
+    @GetMapping("/{id}/enrollees")
+    public List<UUID> getEnrollees(@PathVariable UUID id) {
+        return enrollmentService.findUsersByCourse(id);
+    }
+
+    @PostMapping("/{id}/enrollees")
+    @ResponseStatus(HttpStatus.CREATED)
+    public void enroll(@PathVariable UUID id, @Valid @RequestBody EnrollRequest request) {
+        enrollmentService.enroll(id, request.userId());
+    }
+
+    @DeleteMapping("/{id}/enrollees/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void unenroll(@PathVariable UUID id, @PathVariable UUID userId) {
+        enrollmentService.unenroll(id, userId);
     }
 }
