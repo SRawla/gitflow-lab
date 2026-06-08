@@ -33,42 +33,48 @@ Tracks every action (manual + automated) during end-to-end validation of the bra
 
 ---
 
-## Phase 2 — Feature 2 + QA Bug Fix (conflict test)
+## Phase 2 — Feature 2 + QA Bug Fixes (conflict test)
 
-**Goal:** Validate that an open (unmerged) auto-qa-pr does NOT override a bug fix that lands on qa independently.
+**Goal:** Validate GR1 (sync-qa-to-develop) in both happy path (clean cherry-pick) and conflict path, plus verify that fixes on qa propagate correctly to develop.
 
-### Scenario Setup
-
-- Feature 2 (`feat/user-course-assignment`) touches `CourseController.java` or `CourseService.java`
-- Bug fix (`fix/course-logging`) also touches same file(s) on qa
-- Feature 2 auto-qa-pr stays OPEN while bug fix merges to qa
-- Expected: open PR gets conflict → forces manual resolution (no silent override)
-
-### Actions
+### Phase 2a — Feature 2 + Bug Fix 1 (Logging)
 
 | # | Action | Type | Actor | Status | Notes |
 |---|--------|------|-------|--------|-------|
-| 1 | Create `feat/user-course-assignment` branch from develop | 👤 | Dev | ⏳ | |
-| 2 | Implement user-course join table + endpoints | 👤 | Dev | ⏳ | Intentionally modifies CourseController/Service |
-| 3 | PR `feat/user-course-assignment` → develop | 👤 | Dev | ⏳ | |
-| 4 | `auto-qa-pr.yaml` fires → cherry-pick PR to qa | 🤖 | System | ⏳ | **DO NOT MERGE — leave open** |
-| 5 | QA reports bug: missing logging on Course endpoints | 👤 | QE | ⏳ | |
-| 6 | Create `fix/course-logging` branch from qa | 👤 | Dev | ⏳ | Adds @Slf4j + log statements to CourseController |
-| 7 | PR `fix/course-logging` → qa | 👤 | Dev | ⏳ | |
-| 8 | Merge fix PR to qa | 👤 | QE/Ops | ⏳ | |
-| 9 | `sync-qa-to-develop.yaml` (GR1) fires → PR qa→develop | 🤖 | System | ⏳ | **TEST: does GR1 work?** |
-| 10 | Check open Feature 2 auto-qa-pr for conflict | 👤 | Verify | ⏳ | **TEST: conflict or clean merge?** |
-| 11 | Merge GR1 PR (qa→develop) | 👤 | Dev | ⏳ | Fix now on both qa + develop |
-| 12 | Resolve Feature 2 auto-qa-pr conflict (if any) | 👤 | Dev | ⏳ | Manual resolution preserves fix |
+| 1 | Create `feat/user-course-assignment` from develop | 👤 | Dev | ✅ | Enrollment entity, service, repo, DTO, V6 migration |
+| 2 | PR → develop, merged | 👤 | Dev | ✅ | Squash merged |
+| 3 | `auto-qa-pr.yaml` fires → PR #16 to qa | 🤖 | System | ✅ | CONFLICT on CourseController — left open intentionally |
+| 4 | Create `fix/course-logging` from qa | 👤 | Dev | ✅ | Added @Slf4j + log lines to CourseController |
+| 5 | PR `fix/course-logging` → qa, merged | 👤 | Dev | ✅ | PR #19 |
+| 6 | GR1 fires → conflict detected | 🤖 | System | ✅ | CourseController differs (qa: logging only, develop: logging + enrollment) |
+| 7 | GR1 opened conflict draft PRs #20, #21 | 🤖 | System | ✅ | Empty commit approach — 0 files changed |
+| 8 | Conflict PRs closed without resolution | 👤 | Dev | ❌ | **MISTAKE** — fix was LOST on develop |
+| 9 | Manual merge `origin/qa` into develop | 👤 | Dev | ✅ | Resolved conflict, brought logging + enrollment together |
+| 10 | Build + deploy develop (tbs-dev) | 👤 | Dev | ✅ | All endpoints verified |
+| 11 | Build + deploy qa (tbs-qa) | 👤 | Dev | ✅ | All endpoints verified |
 
-### Expected Outcomes
+### Phase 2b — Bug Fix 2 (UUID Error Handling + Count Endpoint)
+
+| # | Action | Type | Actor | Status | Notes |
+|---|--------|------|-------|--------|-------|
+| 1 | Create `fix/uuid-error-handling` from qa | 👤 | Dev | ✅ | |
+| 2 | Add GlobalExceptionHandler (new file) + /courses/count endpoint | 👤 | Dev | ✅ | Bug 2a: new file (clean), Bug 2b: modifies CourseController (conflict) |
+| 3 | PR `fix/uuid-error-handling` → qa, merged | 👤 | Dev | ✅ | PR #22 |
+| 4 | GR1 fires → conflict detected | 🤖 | System | ✅ | Opened draft PR #23 (0 files — empty commit approach) |
+| 5 | Manual cherry-pick `51c29a2` onto develop | 👤 | Dev | ✅ | Resolved CourseController (kept enrollment + count) |
+| 6 | Closed PR #23 | 👤 | Dev | ✅ | Resolved manually |
+| 7 | Build + deploy both envs | 👤 | Dev | ⏳ | |
+
+### Observations from Phase 2
 
 | Test | Expected | Actual |
 |------|----------|--------|
-| GR1 auto-fires on qa push | PR created: qa → develop | |
-| GR1 PR contains logging fix | Yes — same commits | |
-| Feature 2 auto-qa-pr has conflict | Yes — same file modified differently | |
-| Merging Feature 2 PR does NOT lose logging fix | Fix preserved after resolution | |
+| GR1 auto-fires on qa push | PR created | ✅ Fires correctly |
+| GR1 handles clean cherry-pick | Auto-merge to develop | ❓ Not yet tested (Bug 2a was part of same commit as Bug 2b) |
+| GR1 handles conflict | Opens draft conflict PR | ✅ But PR has 0 files (empty commit approach) |
+| Manual resolution preserves all code | Both branches have correct content | ✅ After manual merge/cherry-pick |
+
+**Key learning:** GR1 conflict PRs with 0 files changed are a signal only — actual resolution requires manual `git merge` or `git cherry-pick` locally. Rule: NEVER close these without resolving first.
 
 ---
 
@@ -123,6 +129,11 @@ Tracks every action (manual + automated) during end-to-end validation of the bra
 |------|-------------|
 | 2026-06-08 | Build #11 (develop) 8m46s, #12 (qa) 15m18s — Dockerfile was doing redundant Maven build. Fixed to single-stage. |
 | 2026-06-08 | forward-port + sync-qa-to-develop showed info runs on branch pushes but skipped correctly (GitHub Actions quirk). |
+| 2026-06-08 | GR1 workflow must exist on the TARGET branch (qa has push trigger). Fixed by copying all workflows to qa. |
+| 2026-06-08 | YAML syntax errors: unicode arrows (`→`) + inline multi-line `--body` break GitHub Actions. Fixed with bash variables. |
+| 2026-06-08 | GR1 cherry-picks only the single commit from `github.sha` — no memory of past failures. Lost fix by closing conflict PR. |
+| 2026-06-08 | `pr.yaml` branch validation was missing `fix/* → qa` rule. Added to allow QA bug fixes to PR directly into qa. |
+| 2026-06-08 | `setup-java` with `cache: maven` downloads ~3GB cache archive every run on self-hosted runner. Removed — `.m2` persists on disk. |
 
 ---
 
@@ -130,11 +141,11 @@ Tracks every action (manual + automated) during end-to-end validation of the bra
 
 | Use Case | Validated? | Manual Actions Required | Notes |
 |----------|-----------|------------------------|-------|
-| Feature → develop → auto-PR to qa | | | |
-| QA bug fix → qa → GR1 auto-sync to develop | | | |
-| Open PR does not override fix (conflict forces resolution) | | | |
-| Release cut (qa→master→tag→release branch) | | | |
-| Build-on-tag auto-fires | | | |
-| Forward-port auto-fires | | | |
-| Deploy prod from tag | | | |
-| Hotfix → patch tag → redeploy | | | |
+| Feature → develop → auto-PR to qa | ✅ | Merge auto-qa PR (or resolve conflict) | PR #13 (clean), #16 (conflict) |
+| QA bug fix → qa → GR1 auto-sync to develop | ✅ | Resolve conflict PR if cherry-pick fails | GR1 fires but 0-file conflict PRs need manual merge |
+| Open PR does not override fix (conflict forces resolution) | ✅ | Manual conflict resolution | PR #16 showed conflict correctly |
+| Release cut (qa→master→tag→release branch) | ⏳ | | Phase 3 |
+| Build-on-tag auto-fires | ⏳ | | Phase 3 |
+| Forward-port auto-fires | ⏳ | | Phase 3 |
+| Deploy prod from tag | ⏳ | | Phase 3 |
+| Hotfix → patch tag → redeploy | ⏳ | | Phase 4 |

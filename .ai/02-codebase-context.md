@@ -18,8 +18,8 @@ A minimal Spring Boot REST service that manages two entities — **User** and **
 | Web | Spring Web (embedded Tomcat) | bundled |
 | Persistence | Spring Data JPA + Hibernate | bundled |
 | DB | PostgreSQL | 16 (containerized) |
-| Migrations (Phase 1) | Hibernate `ddl-auto=update` for simplicity; switch to Flyway later if needed | — |
-| Container | Docker (multi-stage build with eclipse-temurin:21) | — |
+| Migrations (Phase 1) | Flyway | V1–V6 scripts in `src/main/resources/db/migration/` |
+| Container | Docker (single-stage, pre-built JAR + JRE Alpine) | — |
 | Registry | GitHub Container Registry (`ghcr.io`) | free for personal repos |
 | Local K8s | kind (Kubernetes in Docker) | latest stable |
 | Deploy | Helm chart in repo (`chart/`) | helm 3 |
@@ -50,11 +50,26 @@ Two entities. The simplest version that has a relation worth testing.
 | `location_id` | UUID (FK → Location.id) | nullable; many users may share one location |
 | `createdAt` | timestamp | auto |
 
+### `Course`
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID (PK) | server-generated |
+| `name` | varchar(120) | not null |
+| `description` | text | nullable |
+| `createdAt` | timestamp | auto |
+
+### `UserCourseAssignment` (on develop only)
+| Field | Type | Notes |
+|---|---|---|
+| `userId` | UUID (composite PK) | FK to User |
+| `courseId` | UUID (composite PK) | FK to Course |
+| `assignedAt` | timestamp | auto |
+
 ### Relationship
 
 ```
 Location 1 ─── ∞ User
-  (User.locationId → Location.id, optional)
+Course ∞ ─── ∞ User   (via user_course_assignment join table)
 ```
 
 JPA mapping: `@ManyToOne` from `User` to `Location` with `fetch = LAZY`. Bi-directional optional (do not add `@OneToMany` on Location unless a future endpoint actually needs it; keeps the entity slim).
@@ -73,6 +88,15 @@ Standard CRUD shape. Keep responses minimal — the point is the deploy flow, no
 | GET | `/locations` | — | `Location[]` | List all |
 | POST | `/locations` | `{name, city?, country?}` | `Location` (201) | Create |
 | GET | `/locations/{id}` | — | `Location` or 404 | Fetch one |
+| GET | `/courses` | — | `Course[]` | List all |
+| POST | `/courses` | `{name, description?}` | `Course` (201) | Create |
+| GET | `/courses/{id}` | — | `Course` or 404 | Fetch one |
+| PUT | `/courses/{id}` | `{name, description?}` | `Course` | Update |
+| DELETE | `/courses/{id}` | — | 204 | Delete |
+| GET | `/courses/count` | — | `long` | Count all courses |
+| GET | `/courses/{id}/enrollees` | — | `UUID[]` | List enrolled users (develop only) |
+| POST | `/courses/{id}/enrollees` | `{userId}` | 201 | Enroll user (develop only) |
+| DELETE | `/courses/{id}/enrollees/{userId}` | — | 204 | Unenroll user (develop only) |
 | GET | `/actuator/health` | — | Spring Boot health | For K8s probes |
 
 Future requirements (Phase 2 onward — added later as branching exercises):
@@ -88,48 +112,74 @@ Future requirements (Phase 2 onward — added later as branching exercises):
 
 ```
 test-branching-strategy/
-├── .ai/                          # this folder — context for AI + dev
+├── .ai/                          # context for AI + dev
 │   ├── CLAUDE.md
 │   ├── 01-branching-strategy-context.md
-│   └── 02-codebase-context.md
+│   ├── 02-codebase-context.md
+│   └── 03-validation-log.md
 ├── .github/
-│   └── workflows/                # GitHub Actions (added in Phase 1)
+│   └── workflows/
+│       ├── pr.yaml                # PR checks (branch name validation + build)
+│       ├── build.yaml             # Manual dispatch: build from any ref
+│       ├── build-on-tag.yaml      # Auto: build on v* tag push
+│       ├── deploy-dev.yaml        # Manual: deploy image to tbs-dev
+│       ├── deploy-qa.yaml         # Manual: deploy image to tbs-qa
+│       ├── deploy-prod.yaml       # Manual: deploy tag to tbs-prod
+│       ├── release-pr.yaml        # Manual: open PR qa→master
+│       ├── release-tag.yaml       # Manual: cut vYYYY.MM.0 + fork release branch
+│       ├── patch-tag.yaml         # Manual: auto-increment patch tag
+│       ├── auto-qa-pr.yaml        # Auto: cherry-pick develop→qa
+│       ├── sync-qa-to-develop.yaml # GR1: cherry-pick qa→develop
+│       └── forward-port.yaml      # GR2: tag push→PRs to qa+develop
 ├── chart/
-│   └── tbs/                      # Helm chart (name: tbs)
+│   └── tbs/                      # Helm chart
 │       ├── Chart.yaml
-│       ├── values.yaml           # defaults
+│       ├── values.yaml
 │       ├── values-dev.yaml
 │       ├── values-qa.yaml
 │       ├── values-prod.yaml
 │       └── templates/
-│           ├── deployment.yaml
-│           ├── service.yaml
-│           ├── ingress.yaml
-│           └── configmap.yaml
-├── deploy/
-│   ├── kind-cluster.yaml         # kind cluster definition (1 node + ingress-ready)
-│   └── docker-compose.local.yml  # local-only Postgres (for `mvn spring-boot:run`)
 ├── src/
-│   ├── main/
-│   │   ├── java/com/sh/tbs/
-│   │   │   ├── TbsApplication.java
-│   │   │   ├── location/
-│   │   │   │   ├── Location.java
-│   │   │   │   ├── LocationRepository.java
-│   │   │   │   ├── LocationService.java
-│   │   │   │   └── LocationController.java
-│   │   │   └── user/
-│   │   │       ├── User.java
-│   │   │       ├── UserRepository.java
-│   │   │       ├── UserService.java
-│   │   │       └── UserController.java
-│   │   └── resources/
-│   │       ├── application.yaml
-│   │       └── application-local.yaml
-│   └── test/
-│       └── java/com/sh/tbs/
-│           └── (JUnit + Spring Boot Test)
-├── Dockerfile                    # multi-stage build
+│   ├── main/java/com/sh/tbs/
+│   │   ├── TbsApplication.java
+│   │   ├── common/
+│   │   │   └── ResourceNotFoundException.java
+│   │   ├── exception/
+│   │   │   └── GlobalExceptionHandler.java   # Bug Fix 2a
+│   │   ├── location/
+│   │   │   ├── Location.java
+│   │   │   ├── LocationRepository.java
+│   │   │   ├── LocationService.java
+│   │   │   └── LocationController.java
+│   │   ├── course/
+│   │   │   ├── Course.java
+│   │   │   ├── CourseRepository.java
+│   │   │   ├── CourseService.java
+│   │   │   ├── CourseController.java
+│   │   │   └── dto/
+│   │   │       ├── CourseRequest.java
+│   │   │       └── CourseResponse.java
+│   │   ├── enrollment/               # Feature 2 (develop only)
+│   │   │   ├── EnrollRequest.java
+│   │   │   ├── EnrollmentRepository.java
+│   │   │   ├── EnrollmentService.java
+│   │   │   ├── UserCourseAssignment.java
+│   │   │   └── UserCourseId.java
+│   │   └── user/
+│   │       ├── User.java
+│   │       ├── UserRepository.java
+│   │       ├── UserService.java
+│   │       └── UserController.java
+│   └── main/resources/
+│       ├── application.yaml
+│       └── db/migration/
+│           ├── V1__create_location.sql
+│           ├── V2__create_user.sql
+│           ├── V3__seed_data.sql
+│           ├── V4__create_course.sql
+│           ├── V5__seed_courses.sql
+│           └── V6__create_user_course.sql  # Feature 2 (develop only)
+├── Dockerfile                    # Single-stage: JRE Alpine + pre-built JAR
 ├── pom.xml
 └── README.md
 ```
@@ -220,17 +270,10 @@ The GitHub Actions workflows automate steps 4–5 for every relevant push.
 
 ## 8. Image tag scheme
 
-Matches the Model C scheme from the strategy doc:
-
-| Branch type → image tag |
-|---|
-| `develop` → `develop.{run_number}.{short_sha}` |
-| `qa` → `qa.{run_number}.{short_sha}` |
-| `release/YYYY.MM` → `patch.{run_number}.{short_sha}` |
-| `hotfix/YYYY.MM` (if used) → `hotfix.{run_number}.{short_sha}` |
-| Git tag `vYYYY.MM.N` → resolved to its build via `release-manifest.yaml` in chart |
-
-The Helm chart's `values.yaml` reads the image tag from a single key; workflows overwrite it per environment.
+| Ref type | Image tag |
+|---|---|
+| Version tag (`v*`) | Tag value directly (e.g. `v2026.06.0`) |
+| Branch | `{sanitized-branch}.{run_number}` (e.g. `develop.15`, `qa.16`) |
 
 ---
 
