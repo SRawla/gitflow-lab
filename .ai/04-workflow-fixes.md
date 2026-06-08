@@ -121,7 +121,7 @@ On first deploy the deployment does not exist yet — fails silently via `|| tru
 
 **Fix:** Remove the `kubectl rollout restart` line entirely.
 
-**Status:** TODO
+**Status:** ✅ Done
 
 ---
 
@@ -133,7 +133,7 @@ On first deploy the deployment does not exist yet — fails silently via `|| tru
 
 **Fix:** Remove the `kubectl rollout restart` line entirely.
 
-**Status:** TODO
+**Status:** ✅ Done
 
 ---
 
@@ -166,7 +166,7 @@ fi
 
 **Fix:** Remove the `kubectl rollout restart` line entirely.
 
-**Status:** TODO
+**Status:** ✅ Done
 
 ---
 
@@ -190,7 +190,7 @@ if [[ "$TAG" =~ \.0$ ]]; then
 fi
 ```
 
-**Status:** TODO
+**Status:** ✅ Done
 
 ---
 
@@ -225,7 +225,7 @@ done
 On conflict: commit empty placeholder, open draft PR.
 Developer is responsible for resolving.
 
-**Status:** TODO
+**Status:** ✅ Done
 
 ---
 
@@ -247,7 +247,7 @@ if [[ "$COMMIT_MSG" == *"[auto-promote]"* ]] || [[ "$COMMIT_MSG" == *"[forward-p
 fi
 ```
 
-**Status:** TODO
+**Status:** ✅ Done
 
 ---
 
@@ -269,7 +269,7 @@ PR (e.g., emergency hotfix bypassing normal flow), tests would be skipped entire
 ```
 If tests fail, the build step fails and no Docker image is produced.
 
-**Status:** TODO
+**Status:** ✅ Done
 
 ---
 
@@ -297,7 +297,7 @@ fi
 echo "master == qa at $MASTER_SHA — safe to tag"
 ```
 
-**Status:** TODO
+**Status:** ✅ Done
 
 ---
 
@@ -326,7 +326,7 @@ curl -sf --retry 5 --retry-delay 3 \
 ```
 Replace `dev.tbs.local` with `qa.tbs.local` or `prod.tbs.local` per workflow.
 
-**Status:** TODO
+**Status:** ✅ Done
 
 ---
 
@@ -344,7 +344,7 @@ Silent drift means branches can diverge without anyone noticing until a merge co
 - Opens issue with `drift-alert` label if drift detected
 - Auto-closes the issue when drift is resolved
 
-**Status:** TODO
+**Status:** ✅ Done
 
 ---
 
@@ -362,7 +362,7 @@ timely review and keeps the PR list clean.
 - Finds open `qa-promote/*` PRs older than 30 days
 - Closes with comment explaining how to re-promote if still needed
 
-**Status:** TODO
+**Status:** ✅ Done
 
 ---
 
@@ -381,7 +381,7 @@ strategy is designed to avoid.
 - Cherry-picks that specific commit from develop onto a fresh qa-promote branch
 - Opens PR to qa (same pattern as auto-qa-pr)
 
-**Status:** TODO
+**Status:** ✅ Done
 
 ---
 
@@ -406,7 +406,78 @@ fi
 echo "Branch is ahead of $LATEST — safe to tag"
 ```
 
-**Status:** TODO
+**Status:** ✅ Done
+
+---
+
+---
+
+### TASK-14 — Remove `actions/setup-java@v4` from build and PR workflows
+**Priority:** Medium — performance
+**Files:** `.github/workflows/build.yaml`, `build-on-tag.yaml`, `pr.yaml`
+
+**Problem:**
+`actions/setup-java@v4` downloads and configures the JDK on every workflow run.
+On a persistent self-hosted Windows runner, Java 21 is permanently installed
+machine-wide. This action adds unnecessary overhead (download + PATH config)
+on every single build and PR check — even when nothing has changed.
+
+**Fix:** Replace the `actions/setup-java@v4` step with a lightweight version check:
+```bash
+JAVA_VER=$(java -version 2>&1 | head -1)
+if ! java -version 2>&1 | grep -q '"21'; then
+  echo "::error::Java 21 required but found: $JAVA_VER"
+  exit 1
+fi
+echo "✅ Java 21 available (machine-installed, no download needed)"
+```
+If Java is ever missing from the runner, the step fails fast with a clear error.
+
+**Note on Maven deps:** `~/.m2/repository` on self-hosted runner persists between
+runs on the same machine. No `actions/cache` needed — dependencies are already local.
+
+**Status:** ✅ Done
+
+---
+
+### TASK-15 — `build-on-tag.yaml`: Remove redundant second Maven compile
+**Priority:** Medium — performance
+**File:** `.github/workflows/build-on-tag.yaml`
+
+**Problem:**
+The workflow currently runs two Maven steps:
+1. `./mvnw -B verify` — compile → test → package → verify (produces JAR in `target/`)
+2. `./mvnw -B -DskipTests clean package` — deletes `target/`, recompiles from scratch
+
+Step 2 throws away all the work from step 1 and recompiles unnecessarily.
+The Maven `verify` lifecycle already includes `package`, so the JAR is already
+in `target/` after step 1. The Dockerfile just copies `target/*.jar`.
+
+**Fix:** Remove the second `./mvnw -B -DskipTests clean package` step entirely.
+Rename step 1 to `Run tests and build JAR` to make the intent clear.
+
+**Status:** ✅ Done
+
+---
+
+### TASK-16 — Enable Docker BuildKit in build workflows
+**Priority:** Low — performance
+**Files:** `.github/workflows/build.yaml`, `build-on-tag.yaml`
+
+**Problem:**
+Docker builds run without BuildKit. BuildKit provides smarter layer caching,
+parallel step execution, and better cache reuse across runs. On a self-hosted runner
+the Docker layer cache already persists on disk — BuildKit makes better use of it.
+
+**Fix:** Add `DOCKER_BUILDKIT: "1"` env var to the docker build step:
+```yaml
+- name: Build Docker image
+  env:
+    DOCKER_BUILDKIT: "1"
+  run: docker build -t ...
+```
+
+**Status:** ✅ Done
 
 ---
 
@@ -414,17 +485,20 @@ echo "Branch is ahead of $LATEST — safe to tag"
 
 Apply in this sequence to avoid dependency issues:
 
-| Order | Task | Reason |
-|---|---|---|
-| 1 | TASK-06 | Close GR1 loop gap first — affects all flows |
-| 2 | TASK-07 | Critical prod safety — run before any release testing |
-| 3 | TASK-08 | Critical release guard — run before Phase 3 validation |
-| 4 | TASK-04 + TASK-05 | Forward-port correctness — needed for hotfix flow |
-| 5 | TASK-01 + TASK-02 + TASK-03 | Deploy fixes — independent of above |
-| 6 | TASK-13 | Patch tag guard — before hotfix flow testing |
-| 7 | TASK-09 | Smoke tests — add after deploys are stable |
-| 8 | TASK-10 | Activate GR3 — after main flows are validated |
-| 9 | TASK-11 + TASK-12 | Activate stale/re-promote — housekeeping |
+| Order | Task | Reason | Status |
+|---|---|---|---|
+| 1 | TASK-06 | Close GR1 loop gap first — affects all flows | ✅ Done |
+| 2 | TASK-07 | Critical prod safety — run before any release testing | ✅ Done |
+| 3 | TASK-08 | Critical release guard — run before Phase 3 validation | ✅ Done |
+| 4 | TASK-04 + TASK-05 | Forward-port correctness — needed for hotfix flow | ✅ Done |
+| 5 | TASK-01 + TASK-02 + TASK-03 | Deploy fixes — independent of above | ✅ Done |
+| 6 | TASK-13 | Patch tag guard — before hotfix flow testing | ✅ Done |
+| 7 | TASK-09 | Smoke tests — add after deploys are stable | ✅ Done |
+| 8 | TASK-10 | Activate GR3 — after main flows are validated | ✅ Done |
+| 9 | TASK-11 + TASK-12 | Activate stale/re-promote — housekeeping | ✅ Done |
+| 10 | TASK-14 | Remove actions/setup-java download on self-hosted runner  | ✅ Done |
+| 11 | TASK-15 | Remove redundant Maven recompile in build-on-tag  | ✅ Done |
+| 12 | TASK-16 | Enable Docker BuildKit for better layer cache reuse  | ✅ Done |
 
 ---
 
