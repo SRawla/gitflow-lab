@@ -54,6 +54,12 @@ public class CourseController {
         service.delete(id);
     }
 
+    @GetMapping("/count")
+    public long count() {
+        log.info("GET /courses/count");
+        return service.count();
+    }
+
     // --- Enrollment endpoints (Feature 2) ---
 
     @GetMapping("/{id}/enrollees")
