@@ -59,23 +59,4 @@ public class CourseController {
         log.info("GET /courses/count");
         return service.count();
     }
-
-    // --- Enrollment endpoints (Feature 2) ---
-
-    @GetMapping("/{id}/enrollees")
-    public List<UUID> getEnrollees(@PathVariable UUID id) {
-        return enrollmentService.findUsersByCourse(id);
-    }
-
-    @PostMapping("/{id}/enrollees")
-    @ResponseStatus(HttpStatus.CREATED)
-    public void enroll(@PathVariable UUID id, @Valid @RequestBody EnrollRequest request) {
-        enrollmentService.enroll(id, request.userId());
-    }
-
-    @DeleteMapping("/{id}/enrollees/{userId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void unenroll(@PathVariable UUID id, @PathVariable UUID userId) {
-        enrollmentService.unenroll(id, userId);
-    }
 }

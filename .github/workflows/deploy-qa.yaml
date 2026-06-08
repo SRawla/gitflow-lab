@@ -35,6 +35,7 @@ jobs:
 
       - name: Deploy via Helm
         run: |
+          kubectl rollout restart deployment/qa -n tbs-qa 2>/dev/null || true
           helm upgrade --install qa chart/tbs \
             -f chart/tbs/values-qa.yaml \
             --set image.tag=${{ inputs.image_tag }} \
