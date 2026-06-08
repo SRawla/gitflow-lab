@@ -48,6 +48,10 @@ public class CourseService {
         repository.deleteById(id);
     }
 
+    public long count() {
+        return repository.count();
+    }
+
     private CourseResponse toResponse(Course c) {
         return new CourseResponse(c.getId(), c.getName(), c.getDescription(), c.getCreatedAt());
     }

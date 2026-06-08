@@ -50,4 +50,10 @@ public class CourseController {
         log.info("DELETE /courses/{}", id);
         service.delete(id);
     }
+
+    @GetMapping("/count")
+    public long count() {
+        log.info("GET /courses/count");
+        return service.count();
+    }
 }
