@@ -64,6 +64,15 @@ jobs:
           NEXT_N=$((CURRENT_N + 1))
           NEW_TAG="v${VERSION}.${NEXT_N}"
 
+          # Guard: release branch must have new commits since last tag
+          COMMITS_SINCE=$(git log "${LATEST}..HEAD" --no-merges --oneline | wc -l)
+          if [ "$COMMITS_SINCE" -eq 0 ]; then
+            echo "::error::No new commits on $BRANCH since $LATEST. Nothing to patch."
+            echo "::error::Merge your fix into $BRANCH first, then re-run."
+            exit 1
+          fi
+          echo "✅ Found $COMMITS_SINCE new commit(s) on $BRANCH since $LATEST"
+
           # Tag message
           MSG="${{ inputs.message }}"
           if [ -z "$MSG" ]; then

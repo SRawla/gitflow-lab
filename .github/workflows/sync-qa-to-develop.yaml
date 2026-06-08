@@ -46,6 +46,12 @@ jobs:
             exit 0
           fi
 
+          # Loop prevention: skip commits that came from forward-port (GR2 release -> qa)
+          if [[ "$COMMIT_MSG" == *"[forward-port]"* ]]; then
+            echo "Skipping: commit is a forward-port from release branch, no need to re-sync to develop"
+            exit 0
+          fi
+
           BRANCH_NAME="forward-port/${SHORT_SHA}"
 
           git fetch origin develop

@@ -1,0 +1,71 @@
+name: Re-promote to QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: "Commit SHA from develop to cherry-pick to qa"
+        required: true
+        type: string
+
+jobs:
+  re-promote:
+    name: "Re-promote ${{ inputs.commit_sha }} to qa"
+    runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Add Git Bash to PATH
+        shell: pwsh
+        run: echo "C:\Program Files\Git\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Cherry-pick and open PR
+        run: |
+          COMMIT="${{ inputs.commit_sha }}"
+          SHORT_SHA="${COMMIT:0:7}"
+          COMMIT_MSG=$(git log -1 --format='%s' "$COMMIT")
+          BRANCH_NAME="qa-promote/${SHORT_SHA}-repromote"
+
+          git fetch origin qa
+          git checkout -b "$BRANCH_NAME" origin/qa
+
+          if ! git cherry-pick "$COMMIT" --allow-empty; then
+            echo "Cherry-pick conflict detected"
+            git cherry-pick --abort
+            git commit --allow-empty -m "CONFLICT: cherry-pick of $SHORT_SHA failed"
+            git push origin "$BRANCH_NAME"
+
+            gh pr create \
+              --title "CONFLICT - re-promote to qa: $COMMIT_MSG" \
+              --body "Re-promote cherry-pick of $SHORT_SHA from develop failed due to conflicts. Contributor must resolve manually. Source commit: $COMMIT" \
+              --base qa \
+              --head "$BRANCH_NAME" \
+              --draft
+            exit 0
+          fi
+
+          git push origin "$BRANCH_NAME"
+
+          gh pr create \
+            --title "re-promote to qa: $COMMIT_MSG" \
+            --body "Manual re-promote of $SHORT_SHA from develop. Original commit: $COMMIT_MSG. Merge when ready." \
+            --base qa \
+            --head "$BRANCH_NAME"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

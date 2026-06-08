@@ -1,0 +1,40 @@
+name: Stale QA PR Cleanup
+
+on:
+  schedule:
+    - cron: "0 10 * * *"
+  workflow_dispatch:
+
+jobs:
+  close-stale:
+    name: Close stale QA PRs (30+ days)
+    runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Add Git Bash to PATH
+        shell: pwsh
+        run: echo "C:\Program Files\Git\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Find and close stale qa-promote PRs
+        run: |
+          CUTOFF=$(date -u -d "30 days ago" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-30d +%Y-%m-%dT%H:%M:%SZ)
+
+          gh pr list \
+            --base qa \
+            --state open \
+            --json number,title,headRefName,createdAt \
+            --jq ".[] | select(.headRefName | startswith(\"qa-promote/\")) | select(.createdAt < \"$CUTOFF\") | .number" \
+          | while read -r PR_NUM; do
+            echo "Closing stale PR #$PR_NUM"
+            gh pr close "$PR_NUM" \
+              --comment "Auto-closed: open for 30+ days without merge. If still needed, use the re-promote workflow with the original commit SHA."
+          done
+
+          echo "Stale QA PR cleanup complete"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
