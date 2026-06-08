@@ -1,0 +1,84 @@
+name: "Release: Patch Tag"
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: "Release branch to tag (e.g. release/2026.06)"
+        required: true
+        type: string
+      message:
+        description: "Tag message (e.g. ticket IDs included)"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  patch-tag:
+    name: "Cut next patch tag on ${{ inputs.release_branch }}"
+    runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: write
+
+    steps:
+      - name: Add Git Bash to PATH
+        shell: pwsh
+        run: echo "C:\Program Files\Git\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_branch }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Compute next tag and push
+        run: |
+          BRANCH="${{ inputs.release_branch }}"
+          # Extract YYYY.MM from branch name (release/YYYY.MM)
+          VERSION="${BRANCH#release/}"
+
+          if [[ ! "$VERSION" =~ ^[0-9]{4}\.[0-9]{2}$ ]]; then
+            echo "::error::Branch name must be release/YYYY.MM format. Got: $BRANCH"
+            exit 1
+          fi
+
+          # Find latest patch number for this version
+          LATEST=$(git tag -l "v${VERSION}.*" | sort -V | tail -1)
+
+          if [ -z "$LATEST" ]; then
+            echo "::error::No base tag v${VERSION}.0 found. Run release-tag.yaml first."
+            exit 1
+          fi
+
+          # Extract N and increment
+          CURRENT_N="${LATEST##*.}"
+          NEXT_N=$((CURRENT_N + 1))
+          NEW_TAG="v${VERSION}.${NEXT_N}"
+
+          # Tag message
+          MSG="${{ inputs.message }}"
+          if [ -z "$MSG" ]; then
+            MSG="Patch ${NEW_TAG}"
+          fi
+
+          git tag -a "$NEW_TAG" -m "$MSG"
+          git push origin "$NEW_TAG"
+
+          echo "## Patch Tag Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Tag | $NEW_TAG |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | $BRANCH |" >> $GITHUB_STEP_SUMMARY
+          echo "| Previous | $LATEST |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Next:** \`build-on-tag\` will auto-build. Then run \`Deploy PROD\` with \`$NEW_TAG\`." >> $GITHUB_STEP_SUMMARY

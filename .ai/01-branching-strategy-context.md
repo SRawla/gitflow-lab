@@ -4,7 +4,7 @@
 
 To **practically validate** the SkyHive Branching Strategy v2 (Model C) end-to-end on a tiny app, before rolling it out to the real services. Every concept in the strategy — branches, tags, fork, promotion, forward-port, guard rails, workflow automation — must be observable here through actual git operations and GitHub Actions runs.
 
-> **Reference doc for the strategy itself:** `C:\SkyHive\ENT-2-0\CodeBase\.helper-resource\branching-strategy-v2\branching-strategy-guide.html`. This file does NOT re-document the strategy; it documents how this demo repo validates it.
+> **Reference doc for the strategy itself:** `C:\SkyHive\ENT-2-0\CodeBase\.helper-resource\branching-strategy-v2\branching-strategy-guide.html`. This file is proposed / new brnaching strategy. Which has info on current pain points, the new strategy, and the rationale behind it. The purpose of this sandbox repo is to validate that the strategy is workable in practice, and to refine the implementation details (branch naming, workflow triggers, etc.) before we apply it to the real codebase.
 
 ---
 
