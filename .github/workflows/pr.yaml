@@ -7,20 +7,31 @@ on:
 jobs:
   validate:
     name: Validate PR
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
 
     steps:
+      - name: Add Git Bash to PATH
+        shell: pwsh
+        run: echo "C:\Program Files\Git\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Validate branch name
+        env:
+          SOURCE: ${{ github.head_ref }}
+          TARGET: ${{ github.base_ref }}
         run: |
-          SOURCE="${{ github.head_ref }}"
-          TARGET="${{ github.base_ref }}"
           echo "PR: $SOURCE -> $TARGET"
 
           if [[ "$SOURCE" =~ ^(feat|fix|chore)/[a-zA-Z0-9._-]+$ ]] && [[ "$TARGET" == "develop" ]]; then
             echo "Valid: feature/fix/chore -> develop"
+
+          elif [[ "$SOURCE" =~ ^fix/[a-zA-Z0-9._-]+$ ]] && [[ "$TARGET" == "qa" ]]; then
+            echo "Valid: fix/* -> qa (QA bug fix)"
 
           elif [[ "$SOURCE" =~ ^qa-promote/ ]] && [[ "$TARGET" == "qa" ]]; then
             echo "Valid: qa-promote/* -> qa (auto cherry-pick)"
@@ -60,7 +71,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: maven
 
       - name: Build and test
         run: ./mvnw -B verify

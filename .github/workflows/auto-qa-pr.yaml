@@ -37,6 +37,13 @@ jobs:
           COMMIT="${{ github.sha }}"
           SHORT_SHA="${COMMIT:0:7}"
           COMMIT_MSG=$(git log -1 --format='%s' "$COMMIT")
+
+          # Loop prevention: skip commits that came from GR1 (qa → develop sync)
+          if [[ "$COMMIT_MSG" == *"[forward-port]"* ]]; then
+            echo "Skipping: commit is a forward-port from qa, no need to promote back"
+            exit 0
+          fi
+
           BRANCH_NAME="qa-promote/${SHORT_SHA}"
 
           git fetch origin qa
@@ -44,14 +51,13 @@ jobs:
 
           if ! git cherry-pick "$COMMIT" --allow-empty; then
             echo "Cherry-pick conflict detected"
-            echo "Commit: $COMMIT_MSG ($SHORT_SHA)"
             git cherry-pick --abort
             git commit --allow-empty -m "CONFLICT: cherry-pick of $SHORT_SHA failed"
             git push origin "$BRANCH_NAME"
 
             gh pr create \
-              --title "CONFLICT - promote to qa: $COMMIT_MSG" \
-              --body "Cherry-pick of $SHORT_SHA from develop failed due to conflicts. Contributor must resolve manually. Source commit: $COMMIT" \
+              --title "CONFLICT [auto-promote] $COMMIT_MSG" \
+              --body "Cherry-pick of $SHORT_SHA from develop failed due to conflicts. Resolve manually.\nSource commit: $COMMIT" \
               --base qa \
               --head "$BRANCH_NAME" \
               --draft
@@ -61,8 +67,8 @@ jobs:
           git push origin "$BRANCH_NAME"
 
           gh pr create \
-            --title "promote to qa: $COMMIT_MSG" \
-            --body "Auto cherry-pick of $SHORT_SHA from develop. Merge when ready. Close/delete if this should not go to qa." \
+            --title "[auto-promote] $COMMIT_MSG" \
+            --body "Auto cherry-pick of $SHORT_SHA from develop.\nMerge when ready. Close if this should not go to qa." \
             --base qa \
             --head "$BRANCH_NAME"
         env:

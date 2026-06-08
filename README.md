@@ -1,6 +1,6 @@
 # test-branching-strategy
 
-A personal sandbox to **practically validate** the SkyHive Branching Strategy v2 (Model C) end-to-end on a tiny Spring Boot + Postgres service running on local Kubernetes (`kind`), with real GitHub Actions wired to a self-hosted runner.
+A personal sandbox to **practically validate** a Branching Strategy v2 (Model C) end-to-end on a tiny Spring Boot + Postgres service running on local Kubernetes (`kind`), with real GitHub Actions wired to a self-hosted runner.
 
 > The actual app is intentionally minimal — the value is in the workflow, not the code.
 
@@ -10,9 +10,9 @@ All project context is in [`.ai/`](./.ai/).
 
 | File | Purpose |
 |---|---|
-| [`.ai/CLAUDE.md`](./.ai/CLAUDE.md) | Entry index — start here |
 | [`.ai/01-branching-strategy-context.md`](./.ai/01-branching-strategy-context.md) | The strategy plan: branches, tags, envs, workflows, guard rails, validation phases |
 | [`.ai/02-codebase-context.md`](./.ai/02-codebase-context.md) | The code plan: Spring Boot + JPA, domain model, project structure, Helm/K8s, build & run |
+| [`.ai/03-validation-log.md`](./.ai/03-validation-log.md) | Validation tracking: every action (manual + auto) across all phases |
 
 ## Tech stack (one line)
 
@@ -20,7 +20,15 @@ Spring Boot 3.x · Java 21 · Maven · PostgreSQL 16 · Docker → ghcr.io · ki
 
 ## Status
 
-Pre-scaffold. Context docs only. Next step: Phase 1 setup (app + Dockerfile + Helm chart + kind cluster + base workflows).
+Phase 2 complete. App running on `tbs-dev` and `tbs-qa`. Next: Phase 3 (release cut — qa→master→tag→release branch→prod deploy).
+
+### Current branch state
+
+| Branch | Content |
+|---|---|
+| develop | Feature 1 (Course CRUD) + Feature 2 (Enrollment) + Fix 1 (logging) + Fix 2 (UUID handler + count) |
+| qa | Feature 1 + Fix 1 + Fix 2 |
+| master | Initial scaffold only |
 
 ---
 

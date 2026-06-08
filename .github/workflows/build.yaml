@@ -3,14 +3,10 @@ name: Build
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: "Branch to build from"
+      ref:
+        description: "Branch or tag to build from (e.g. develop, qa, release/2026.06, v2026.06.1)"
         required: true
-        type: choice
-        options:
-          - develop
-          - qa
-          - master
+        type: string
 
 env:
   REGISTRY: ghcr.io
@@ -18,7 +14,7 @@ env:
 
 jobs:
   build:
-    name: "Build from ${{ inputs.branch }}"
+    name: "Build from ${{ inputs.ref }}"
     runs-on: self-hosted
     defaults:
       run:
@@ -35,15 +31,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ inputs.ref }}
 
       - name: Resolve image tag
         id: tag
         run: |
-          BRANCH="${{ inputs.branch }}"
-          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          REF="${{ inputs.ref }}"
           RUN="${{ github.run_number }}"
-          TAG="${BRANCH}.${RUN}"
+
+          # If ref looks like a version tag (v*), use it directly
+          if [[ "$REF" =~ ^v[0-9]{4}\.[0-9]{2}\.[0-9]+$ ]]; then
+            TAG="$REF"
+          else
+            # For branches: sanitize slashes and append run number
+            SAFE_REF=$(echo "$REF" | sed 's|/|-|g')
+            TAG="${SAFE_REF}.${RUN}"
+          fi
+
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "Image tag: $TAG"
 
@@ -52,7 +56,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: maven
 
       - name: Build JAR
         run: ./mvnw -B -DskipTests clean package
@@ -72,7 +75,7 @@ jobs:
           echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
           echo "| Image Tag | ${{ steps.tag.outputs.tag }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Branch | ${{ inputs.branch }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Ref | ${{ inputs.ref }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | $(git rev-parse --short=7 HEAD) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Use this tag in deploy-dev / deploy-qa / deploy-prod workflow." >> $GITHUB_STEP_SUMMARY
